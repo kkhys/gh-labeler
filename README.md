@@ -78,19 +78,19 @@ Create a `labels.json` or `labels.yaml` file:
 [
   {
     "name": "bug",
-    "color": "d73a4a",
+    "color": "#d73a4a",
     "description": "Something isn't working",
     "aliases": ["defect", "issue"]
   },
   {
     "name": "enhancement",
-    "color": "a2eeef", 
+    "color": "#a2eeef", 
     "description": "New feature or request",
     "aliases": ["feature"]
   },
   {
     "name": "documentation",
-    "color": "0075ca",
+    "color": "#0075ca",
     "description": "Improvements or additions to documentation",
     "aliases": ["docs"]
   }
@@ -134,7 +134,7 @@ gh-labeler sync -r owner/repo
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | ✅ | Label name |
-| `color` | string | ✅ | Hex color code (without #) |
+| `color` | string | ✅ | Hex color code (with # prefix required) |
 | `description` | string | ❌ | Label description |
 | `aliases` | array | ❌ | Alternative names for the label |
 | `delete` | boolean | ❌ | Mark label for deletion |
@@ -143,17 +143,17 @@ gh-labeler sync -r owner/repo
 
 ```yaml
 - name: "priority: high"
-  color: "ff0000"
+  color: "#ff0000"
   description: "High priority issue"
   aliases: ["urgent", "critical"]
 
 - name: "type: feature"
-  color: "00ff00"
+  color: "#00ff00"
   description: "New feature request"
   aliases: ["enhancement", "feature-request"]
 
 - name: "status: wontfix"
-  color: "cccccc"
+  color: "#cccccc"
   description: "This will not be worked on"
   delete: true  # Mark for deletion
 ```
