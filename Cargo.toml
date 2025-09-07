@@ -41,7 +41,7 @@ clap    = { version = "4.0", features = ["derive"] }
 colored = "2.0"
 
 # GitHub API
-octocrab = "0.38"
+octocrab = "0.44"
 
 # Configuration validation
 jsonschema = "0.17"
