@@ -38,7 +38,7 @@ tokio      = { version = "1.0", features = ["full"] }
 
 # CLI dependencies
 clap    = { version = "4.0", features = ["derive"] }
-colored = "2.0"
+colored = "3.0"
 
 # GitHub API
 octocrab = "0.38"
