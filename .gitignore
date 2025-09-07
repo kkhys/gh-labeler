@@ -275,3 +275,6 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Built binaries (should not be committed)
+bin/gh-labeler*
