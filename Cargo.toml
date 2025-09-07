@@ -1,6 +1,38 @@
 [package]
-edition = "2024"
-name    = "gh-labeler"
-version = "0.1.0"
+categories  = ["command-line-utilities", "development-tools"]
+description = "A fast and reliable GitHub repository label management tool built with Rust"
+edition     = "2024"
+keywords    = ["github", "labels", "sync", "cli"]
+license     = "MIT"
+name        = "gh-labeler"
+repository  = "https://github.com/kkhys/gh-labeler"
+version     = "0.1.0"
+
+[[bin]]
+name = "gh-labeler"
+path = "src/main.rs"
 
 [dependencies]
+# Core dependencies
+anyhow     = "1.0"
+reqwest    = { version = "0.12", features = ["json"] }
+serde      = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+thiserror  = "1.0"
+tokio      = { version = "1.0", features = ["full"] }
+
+# CLI dependencies
+clap    = { version = "4.0", features = ["derive"] }
+colored = "2.0"
+
+# GitHub API
+octocrab = "0.38"
+
+# Configuration validation
+jsonschema = "0.17"
+
+# Utilities
+chrono  = { version = "0.4", features = ["serde"] }
+futures = "0.3"
+url     = "2.4"
