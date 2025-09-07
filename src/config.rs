@@ -14,7 +14,7 @@ pub struct LabelConfig {
     /// Label name
     pub name: String,
 
-    /// Label color (6-digit hex code without #)
+    /// Label color (6-digit hex code with # prefix required)
     pub color: String,
 
     /// Label description (optional)
@@ -34,7 +34,7 @@ impl LabelConfig {
     ///
     /// # Arguments
     /// - `name`: Label name
-    /// - `color`: Label color (6-digit hex code)
+    /// - `color`: Label color (6-digit hex code with # prefix required)
     ///
     /// # Errors
     /// Returns an error if the color format is invalid
@@ -61,7 +61,15 @@ impl LabelConfig {
             return Err(Error::label_validation("Label name cannot be empty"));
         }
 
-        if !is_valid_hex_color(&self.color) {
+        if !self.color.starts_with('#') {
+            return Err(Error::InvalidLabelColor(format!(
+                "Color must start with #: {}",
+                self.color
+            )));
+        }
+
+        let normalized_color = Self::normalize_color(&self.color);
+        if !is_valid_hex_color(&normalized_color) {
             return Err(Error::InvalidLabelColor(self.color.clone()));
         }
 
@@ -138,42 +146,42 @@ pub fn default_labels() -> Vec<LabelConfig> {
     vec![
         LabelConfig {
             name: "bug".to_string(),
-            color: "d73a4a".to_string(),
+            color: "#d73a4a".to_string(),
             description: Some("Something isn't working".to_string()),
             aliases: vec!["defect".to_string()],
             delete: false,
         },
         LabelConfig {
             name: "enhancement".to_string(),
-            color: "a2eeef".to_string(),
+            color: "#a2eeef".to_string(),
             description: Some("New feature or request".to_string()),
             aliases: vec!["feature".to_string()],
             delete: false,
         },
         LabelConfig {
             name: "documentation".to_string(),
-            color: "0075ca".to_string(),
+            color: "#0075ca".to_string(),
             description: Some("Improvements or additions to documentation".to_string()),
             aliases: vec!["docs".to_string()],
             delete: false,
         },
         LabelConfig {
             name: "duplicate".to_string(),
-            color: "cfd3d7".to_string(),
+            color: "#cfd3d7".to_string(),
             description: Some("This issue or pull request already exists".to_string()),
             aliases: Vec::new(),
             delete: false,
         },
         LabelConfig {
             name: "good first issue".to_string(),
-            color: "7057ff".to_string(),
+            color: "#7057ff".to_string(),
             description: Some("Good for newcomers".to_string()),
             aliases: vec!["beginner-friendly".to_string()],
             delete: false,
         },
         LabelConfig {
             name: "help wanted".to_string(),
-            color: "008672".to_string(),
+            color: "#008672".to_string(),
             description: Some("Extra attention is needed".to_string()),
             aliases: Vec::new(),
             delete: false,
@@ -274,12 +282,21 @@ mod tests {
 
     #[test]
     fn test_label_config_validation() {
-        let valid_label = LabelConfig::new("test".to_string(), "ff0000".to_string()).unwrap();
-        assert_eq!(valid_label.name, "test");
-        assert_eq!(valid_label.color, "ff0000");
+        // # prefix is now required
+        let valid_with_hash = LabelConfig::new("test".to_string(), "#ff0000".to_string()).unwrap();
+        assert_eq!(valid_with_hash.name, "test");
+        assert_eq!(valid_with_hash.color, "#ff0000");
+
+        // Without # should fail
+        let invalid_no_hash = LabelConfig::new("test".to_string(), "ff0000".to_string());
+        assert!(invalid_no_hash.is_err());
 
         // Invalid color
         let invalid_color = LabelConfig::new("test".to_string(), "invalid".to_string());
         assert!(invalid_color.is_err());
+
+        // Invalid hex with # should also fail
+        let invalid_hex_with_hash = LabelConfig::new("test".to_string(), "#invalid".to_string());
+        assert!(invalid_hex_with_hash.is_err());
     }
 }
