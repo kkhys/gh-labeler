@@ -6,9 +6,9 @@
  * This script ensures the Rust binary is available and executable after npm install.
  */
 
-const fs = require("node:fs");
-const path = require("node:path");
-const { execSync } = require("node:child_process");
+import { execSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const binPath = path.join(__dirname, "..", "bin", "gh-labeler");
 const targetPath = path.join(
@@ -48,7 +48,8 @@ function setupBinary() {
       process.exit(0); // Don't fail installation
     }
   } catch (error) {
-    console.error("✗ Failed to setup gh-labeler binary:", error.message);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("✗ Failed to setup gh-labeler binary:", errorMessage);
     console.log("You may need to run `npm run build` manually.");
     process.exit(0); // Don't fail installation
   }
@@ -67,7 +68,8 @@ function verifyBinary() {
       console.log("✓ Binary verification successful:", output.trim());
     }
   } catch (error) {
-    console.warn("⚠ Binary verification failed:", error.message);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn("⚠ Binary verification failed:", errorMessage);
     console.log("The binary may still work, but verification failed.");
   }
 }
