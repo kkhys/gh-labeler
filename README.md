@@ -2,8 +2,12 @@
 
 🦀 A fast and reliable GitHub repository label management tool built with Rust.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm version](https://badge.fury.io/js/gh-labeler.svg)](https://badge.fury.io/js/gh-labeler)
+[![Crates.io](https://img.shields.io/crates/v/gh-labeler?style=flat-square)](https://crates.io/crates/gh-labeler)
+[![Crates.io](https://img.shields.io/crates/d/gh-labeler?style=flat-square&label=crate%20downloads)](https://crates.io/crates/gh-labeler)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/gh-labeler?style=flat-square)](https://www.npmjs.com/package/gh-labeler)
+
+[//]: # ([![npm downloads]&#40;https://img.shields.io/npm/d18m/gh-labeler?style=flat-square&label=npm%20downloads&#41;]&#40;https://www.npmjs.com/package/gh-labeler&#41;)
 
 ## Features
 
