@@ -468,7 +468,7 @@ mod tests {
             },
         ];
 
-        let config = SyncConfig {
+        let _config = SyncConfig {
             access_token: "test".to_string(),
             repository: "owner/repo".to_string(),
             dry_run: true,

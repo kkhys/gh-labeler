@@ -15,8 +15,10 @@ exclude     = [
     "bin/",
     "target/",
     ".github/",
+    ".idea/",
     "scripts/",
     "package.json",
+    "labels.json",
     "*.tgz"
 ]
 

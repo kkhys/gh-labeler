@@ -34,6 +34,7 @@ pub use sync::LabelSyncer;
 ///         repository: "owner/repo".to_string(),
 ///         dry_run: false,
 ///         allow_added_labels: true,
+///         labels: None,
 ///     };
 ///     
 ///     let syncer = LabelSyncer::new(config).await?;
