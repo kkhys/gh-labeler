@@ -131,13 +131,13 @@ gh-labeler sync -r owner/repo
 
 ### Label Configuration
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | ✅ | Label name |
-| `color` | string | ✅ | Hex color code (with # prefix required) |
-| `description` | string | ❌ | Label description |
-| `aliases` | array | ❌ | Alternative names for the label |
-| `delete` | boolean | ❌ | Mark label for deletion |
+| Field         | Type    | Required | Description                             |
+|---------------|---------|----------|-----------------------------------------|
+| `name`        | string  | ✅        | Label name                              |
+| `color`       | string  | ✅        | Hex color code (with # prefix required) |
+| `description` | string  | ❌        | Label description                       |
+| `aliases`     | array   | ❌        | Alternative names for the label         |
+| `delete`      | boolean | ❌        | Mark label for deletion                 |
 
 ### Example YAML Configuration
 
@@ -234,16 +234,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance Benefits
 
-| Aspect | gh-labeler (Rust) |
-|---------|-------------------|
-| Performance | ⚡⚡⚡ Lightning fast |
-| Memory Usage | 📊📊📊 Minimal footprint |
-| Binary Size | 📦 Compact single binary |
-| Startup Time | 🚀 Instant startup |
-| Cross-platform | ✅ Windows, macOS, Linux |
-| Configuration | JSON + YAML support |
-| Dry-run | ✅ Safe preview mode |
-| Verbose output | Detailed operations |
+| Aspect         | gh-labeler (Rust)        |
+|----------------|--------------------------|
+| Performance    | ⚡⚡⚡ Lightning fast       |
+| Memory Usage   | 📊📊📊 Minimal footprint |
+| Binary Size    | 📦 Compact single binary |
+| Startup Time   | 🚀 Instant startup       |
+| Cross-platform | ✅ Windows, macOS, Linux  |
+| Configuration  | JSON + YAML support      |
+| Dry-run        | ✅ Safe preview mode      |
+| Verbose output | Detailed operations      |
 
 ## Contributing
 
