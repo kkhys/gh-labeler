@@ -278,3 +278,10 @@ vite.config.ts.timestamp-*
 
 # Built binaries (should not be committed)
 bin/gh-labeler*
+
+# TypeScript compilation output
+scripts/post-install.js
+
+# Package manager lockfiles
+package-lock.json
+yarn.lock
