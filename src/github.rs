@@ -8,6 +8,32 @@ use serde::{Deserialize, Serialize};
 use crate::config::LabelConfig;
 use crate::error::{Error, Result};
 
+/// Encode a string for use in URL path segments (RFC 3986 with UTF-8 support)
+///
+/// This function properly encodes UTF-8 characters including Japanese text.
+/// Only unreserved characters (A-Z, a-z, 0-9, -, ., _, ~) are left unencoded.
+///
+/// # Arguments
+/// - `input`: The string to encode
+///
+/// # Returns
+/// URL-encoded string safe for use in path segments
+fn encode_path_segment(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| match c {
+            // RFC 3986 unreserved characters
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '.' | '_' | '~' => c.to_string(),
+            // Everything else gets percent-encoded as UTF-8 bytes
+            _ => c
+                .to_string()
+                .bytes()
+                .map(|b| format!("%{:02X}", b))
+                .collect::<String>(),
+        })
+        .collect()
+}
+
 /// GitHub Label Information
 ///
 /// Represents label information retrieved from the GitHub API
@@ -195,9 +221,11 @@ impl GitHubClient {
     /// # Errors
     /// Returns an error if GitHub API fails or label deletion fails
     pub async fn delete_label(&self, label_name: &str) -> Result<()> {
+        // URL encode the label name to handle spaces, special characters, and UTF-8 (Japanese, etc.)
+        let encoded_name = encode_path_segment(label_name);
         self.octocrab
             .issues(&self.owner, &self.repo)
-            .delete_label(label_name)
+            .delete_label(&encoded_name)
             .await
             .map_err(Error::GitHubApi)?;
 
@@ -354,6 +382,40 @@ mod tests {
         assert_eq!(levenshtein_distance("abc", "abc"), 0);
         assert_eq!(levenshtein_distance("abc", "ab"), 1);
         assert_eq!(levenshtein_distance("abc", "axc"), 1);
+    }
+
+    #[test]
+    fn test_encode_path_segment() {
+        // Basic ASCII characters
+        assert_eq!(encode_path_segment("bug"), "bug");
+        assert_eq!(encode_path_segment("feature-request"), "feature-request");
+
+        // Spaces and special characters
+        assert_eq!(
+            encode_path_segment("good first issue"),
+            "good%20first%20issue"
+        );
+        assert_eq!(encode_path_segment("help wanted"), "help%20wanted");
+
+        // Japanese characters (UTF-8)
+        assert_eq!(encode_path_segment("バグ"), "%E3%83%90%E3%82%B0");
+        assert_eq!(
+            encode_path_segment("機能追加"),
+            "%E6%A9%9F%E8%83%BD%E8%BF%BD%E5%8A%A0"
+        );
+
+        // Mixed ASCII and Japanese
+        assert_eq!(encode_path_segment("bug バグ"), "bug%20%E3%83%90%E3%82%B0");
+
+        // RFC 3986 unreserved characters should remain unchanged
+        assert_eq!(
+            encode_path_segment("test-label_v1.2~alpha"),
+            "test-label_v1.2~alpha"
+        );
+
+        // Special characters that need encoding
+        assert_eq!(encode_path_segment("test/label"), "test%2Flabel");
+        assert_eq!(encode_path_segment("test@label"), "test%40label");
     }
 
     #[test]
