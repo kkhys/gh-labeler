@@ -1,0 +1,54 @@
+{
+  "name": "gh-labeler",
+  "version": "0.1.0",
+  "description": "A fast and reliable GitHub repository label management tool built with Rust",
+  "main": "index.js",
+  "bin": {
+    "gh-labeler": "./bin/gh-labeler"
+  },
+  "scripts": {
+    "preinstall": "npm run build",
+    "build": "cargo build --release",
+    "test": "cargo test",
+    "prepare": "cargo build --release && cp target/release/gh-labeler bin/gh-labeler",
+    "postinstall": "node scripts/post-install.js"
+  },
+  "keywords": [
+    "github",
+    "labels",
+    "sync",
+    "cli",
+    "rust",
+    "automation"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kkhys/gh-labeler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kkhys/gh-labeler/issues"
+  },
+  "homepage": "https://github.com/kkhys/gh-labeler#readme",
+  "files": [
+    "bin/gh-labeler",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "engines": {
+    "node": ">=12"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "preferGlobal": true,
+  "devDependencies": {},
+  "dependencies": {}
+}

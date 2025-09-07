@@ -1,12 +1,24 @@
 [package]
-categories  = ["command-line-utilities", "development-tools"]
-description = "A fast and reliable GitHub repository label management tool built with Rust"
-edition     = "2024"
-keywords    = ["github", "labels", "sync", "cli"]
-license     = "MIT"
 name        = "gh-labeler"
-repository  = "https://github.com/kkhys/gh-labeler"
 version     = "0.1.0"
+edition     = "2021"
+description = "A fast and reliable GitHub repository label management tool built with Rust"
+license     = "MIT"
+repository  = "https://github.com/kkhys/gh-labeler"
+homepage    = "https://github.com/kkhys/gh-labeler"
+documentation = "https://docs.rs/gh-labeler"
+readme      = "README.md"
+authors     = ["kkhys <your.email@example.com>"]
+keywords    = ["github", "labels", "sync", "cli", "automation"]
+categories  = ["command-line-utilities", "development-tools"]
+exclude     = [
+    "bin/",
+    "target/",
+    ".github/",
+    "scripts/",
+    "package.json",
+    "*.tgz"
+]
 
 [[bin]]
 name = "gh-labeler"
