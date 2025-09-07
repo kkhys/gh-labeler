@@ -174,7 +174,7 @@ impl LabelSyncer {
                     result.add_operation(operation);
                 }
                 Err(e) => {
-                    result.add_error(format!("Operation failed: {}", e));
+                    result.add_error(format!("Operation failed: {:?} - {}", operation, e));
                     // Continue even if error occurs
                 }
             }

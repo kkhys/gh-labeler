@@ -143,12 +143,13 @@ impl GitHubClient {
     /// # Errors
     /// Returns an error if GitHub API fails or label creation fails
     pub async fn create_label(&self, label: &LabelConfig) -> Result<GitHubLabel> {
+        let normalized_color = crate::config::LabelConfig::normalize_color(&label.color);
         let response = self
             .octocrab
             .issues(&self.owner, &self.repo)
             .create_label(
                 &label.name,
-                &label.color,
+                &normalized_color,
                 label.description.as_deref().unwrap_or(""),
             )
             .await
