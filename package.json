@@ -6,13 +6,6 @@
   "bin": {
     "gh-labeler": "./bin/gh-labeler"
   },
-  "scripts": {
-    "preinstall": "npm run build",
-    "build": "cargo build --release",
-    "test": "cargo test",
-    "prepare": "cargo build --release && cp target/release/gh-labeler bin/gh-labeler",
-    "postinstall": "node scripts/post-install.js"
-  },
   "keywords": [
     "github",
     "labels",
@@ -21,7 +14,7 @@
     "rust",
     "automation"
   ],
-  "author": "Your Name <your.email@example.com>",
+  "author": "Keisuke Hayashi <hi@kkhys.me>",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -49,6 +42,16 @@
     "arm64"
   ],
   "preferGlobal": true,
-  "devDependencies": {},
-  "dependencies": {}
+  "scripts": {
+    "preinstall": "npm run build",
+    "build": "cargo build --release",
+    "test": "cargo test",
+    "prepare": "cargo build --release && cp target/release/gh-labeler bin/gh-labeler",
+    "postinstall": "node scripts/post-install.js",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.3"
+  }
 }
