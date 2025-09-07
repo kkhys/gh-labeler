@@ -26,6 +26,7 @@
   "homepage": "https://github.com/kkhys/gh-labeler#readme",
   "files": [
     "bin/gh-labeler",
+    "scripts/post-install.js",
     "README.md",
     "LICENSE.md"
   ],
