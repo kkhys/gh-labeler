@@ -4,9 +4,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::config::{LabelConfig, SyncConfig, default_labels};
+use crate::config::{default_labels, LabelConfig, SyncConfig};
 use crate::error::{Error, Result};
-use crate::github::{GitHubClient, GitHubLabel, calculate_label_similarity};
+use crate::github::{calculate_label_similarity, GitHubClient, GitHubLabel};
 
 /// Types of label synchronization operations
 #[derive(Debug, Clone, PartialEq)]

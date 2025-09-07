@@ -8,9 +8,9 @@ use std::path::PathBuf;
 use tokio;
 
 use gh_labeler::{
-    Error, Result,
-    config::{SyncConfig, default_labels, load_labels_from_json, load_labels_from_yaml},
+    config::{default_labels, load_labels_from_json, load_labels_from_yaml, SyncConfig},
     sync::LabelSyncer,
+    Error, Result,
 };
 
 /// gh-labeler CLI
