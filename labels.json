@@ -3,27 +3,21 @@
     "name": "bug",
     "color": "d73a4a",
     "description": "Something isn't working",
-    "aliases": [
-      "defect"
-    ],
+    "aliases": ["defect"],
     "delete": false
   },
   {
     "name": "enhancement",
     "color": "a2eeef",
     "description": "New feature or request",
-    "aliases": [
-      "feature"
-    ],
+    "aliases": ["feature"],
     "delete": false
   },
   {
     "name": "documentation",
     "color": "0075ca",
     "description": "Improvements or additions to documentation",
-    "aliases": [
-      "docs"
-    ],
+    "aliases": ["docs"],
     "delete": false
   },
   {
@@ -37,9 +31,7 @@
     "name": "good first issue",
     "color": "7057ff",
     "description": "Good for newcomers",
-    "aliases": [
-      "beginner-friendly"
-    ],
+    "aliases": ["beginner-friendly"],
     "delete": false
   },
   {
