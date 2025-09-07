@@ -44,7 +44,7 @@ colored = "3.0"
 octocrab = "0.44"
 
 # Configuration validation
-jsonschema = "0.17"
+jsonschema = "0.33"
 
 # Utilities
 chrono  = { version = "0.4", features = ["serde"] }
