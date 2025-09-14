@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode (no publishing)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          # Fetch full history for GitHub info-enhanced changelog
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398466c2d8 # v4.0.0
+        with:
+          version: 10.15.1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@21dc36fb71dd22e3317045c0c31a3f4249868b17 # stable
+
+      - name: Install Node.js Dependencies
+        run: pnpm install
+
+      - name: Build TypeScript
+        run: pnpm run build:ts
+
+      - name: Check Changesets Status (Dry Run)
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "🔍 Running in dry-run mode..."
+          pnpm changeset status --verbose
+          echo "📋 Version changes preview:"
+          pnpm changeset version --dry-run || echo "No changesets to process"
+
+      - name: Create Release Pull Request or Publish
+        if: github.event.inputs.dry_run != 'true'
+        id: changesets
+        uses: changesets/action@aba318e9165b45b7948c60273e0b72fce0a64eb9 # v1.4.7
+        with:
+          version: pnpm version
+          publish: pnpm release
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Publish Summary
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          echo "🎉 Successfully published packages!"
+          echo "📦 NPM: https://www.npmjs.com/package/gh-labeler"
+          echo "🦀 Crates.io: https://crates.io/crates/gh-labeler"
+
+      - name: Dry Run Summary
+        if: github.event.inputs.dry_run == 'true'
+        run: |
+          echo "✅ Dry run completed successfully!"
+          echo "🔍 No actual publishing was performed."
+          echo "📝 Check the logs above for preview of changes."

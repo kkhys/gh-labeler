@@ -51,11 +51,21 @@
     "prepare": "npm run build:ts && cargo build --release && cp target/release/gh-labeler bin/gh-labeler",
     "postinstall": "node scripts/post-install.js",
     "lint": "biome check .",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "version": "changeset version && pnpm run sync-versions",
+    "sync-versions": "node scripts/sync-versions.js",
+    "release": "pnpm run build && pnpm run publish:npm && pnpm run publish:cargo",
+    "release:dry-run": "pnpm run build && pnpm run publish:dry-run",
+    "publish:npm": "pnpm publish",
+    "publish:cargo": "cargo publish",
+    "publish:dry-run": "echo 'Dry run: npm publish' && pnpm publish --dry-run && echo 'Dry run: cargo publish' && cargo publish --dry-run"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.4",
+    "@changesets/cli": "2.29.7",
+    "@changesets/get-github-info": "0.6.0",
     "@types/node": "24.3.1",
+    "dotenv": "17.2.2",
     "typescript": "5.9.2"
   },
   "packageManager": "pnpm@10.15.1",
