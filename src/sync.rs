@@ -154,12 +154,7 @@ impl LabelSyncer {
             .collect();
 
         // Target label configuration
-        let target_labels = self
-            .config
-            .labels
-            .as_ref()
-            .map(|l| l.clone())
-            .unwrap_or_else(|| default_labels());
+        let target_labels = self.config.labels.clone().unwrap_or_else(default_labels);
 
         // Build alias map
         let alias_map = self.build_alias_map(&target_labels);
@@ -272,7 +267,7 @@ impl LabelSyncer {
 
         // Check current labels that haven't been processed
         if !self.config.allow_added_labels {
-            for (name, _) in current_labels {
+            for name in current_labels.keys() {
                 if !processed_current_labels.contains(name) {
                     operations.push(SyncOperation::Delete {
                         name: name.clone(),

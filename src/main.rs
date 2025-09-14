@@ -5,7 +5,6 @@
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use std::path::PathBuf;
-use tokio;
 
 use gh_labeler::{
     config::{default_labels, load_labels_from_json, load_labels_from_yaml, SyncConfig},
@@ -321,19 +320,11 @@ fn display_sync_result(result: &gh_labeler::sync::SyncResult, verbose: bool) {
     }
 
     // Display statistics
-    println!("  {} Created: {}", "📝", result.created.to_string().green());
-    println!(
-        "  {} Updated: {}",
-        "🔄",
-        result.updated.to_string().yellow()
-    );
-    println!("  {} Deleted: {}", "🗑️", result.deleted.to_string().red());
-    println!("  {} Renamed: {}", "📛", result.renamed.to_string().blue());
-    println!(
-        "  {} Unchanged: {}",
-        "➖",
-        result.unchanged.to_string().white()
-    );
+    println!("  📝 Created: {}", result.created.to_string().green());
+    println!("  🔄 Updated: {}", result.updated.to_string().yellow());
+    println!("  🗑️ Deleted: {}", result.deleted.to_string().red());
+    println!("  📛 Renamed: {}", result.renamed.to_string().blue());
+    println!("  ➖ Unchanged: {}", result.unchanged.to_string().white());
 
     if verbose {
         println!("\n{} Detailed operations:", "📋".blue());
@@ -342,11 +333,11 @@ fn display_sync_result(result: &gh_labeler::sync::SyncResult, verbose: bool) {
             match operation {
                 gh_labeler::sync::SyncOperation::Create { label } => {
                     println!(
-                        "{} {} Create label: {} ({})",
+                        "{} {} Create label: {} (#{})",
                         prefix,
                         "📝".green(),
                         label.name.cyan(),
-                        format!("#{}", label.color)
+                        label.color
                     );
                 }
                 gh_labeler::sync::SyncOperation::Update {

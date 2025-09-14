@@ -260,7 +260,7 @@ impl GitHubClient {
             limit: rate_limit.resources.core.limit as u32,
             remaining: rate_limit.resources.core.remaining as u32,
             reset_at: chrono::DateTime::from_timestamp(rate_limit.resources.core.reset as i64, 0)
-                .unwrap_or_else(|| chrono::Utc::now()),
+                .unwrap_or_else(chrono::Utc::now),
         })
     }
 }
@@ -332,8 +332,8 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
     let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
 
     // Initialize
-    for i in 0..=a_len {
-        matrix[i][0] = i;
+    for (i, row) in matrix.iter_mut().enumerate().take(a_len + 1) {
+        row[0] = i;
     }
     for j in 0..=b_len {
         matrix[0][j] = j;
