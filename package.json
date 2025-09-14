@@ -1,6 +1,6 @@
 {
   "name": "gh-labeler",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A fast and reliable GitHub repository label management tool built with Rust",
   "main": "index.js",
   "bin": {
