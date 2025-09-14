@@ -1,9 +1,6 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       dry_run:
@@ -88,12 +85,45 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
+      - name: Create GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          
+          echo "## 🚀 Release v${PACKAGE_VERSION}" > release_notes.md
+          echo "" >> release_notes.md
+          echo "### 📦 Installation" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "**npm:**" >> release_notes.md
+          echo "\`\`\`bash" >> release_notes.md
+          echo "npm install -g ${PACKAGE_NAME}" >> release_notes.md
+          echo "\`\`\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "**Cargo:**" >> release_notes.md
+          echo "\`\`\`bash" >> release_notes.md
+          echo "cargo install ${PACKAGE_NAME}" >> release_notes.md
+          echo "\`\`\`" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "### 🔗 Links" >> release_notes.md
+          echo "- 📦 [NPM Package](https://www.npmjs.com/package/${PACKAGE_NAME})" >> release_notes.md
+          echo "- 🦀 [Crates.io Package](https://crates.io/crates/${PACKAGE_NAME})" >> release_notes.md
+          
+          gh release create "v${PACKAGE_VERSION}" \
+            --title "Release v${PACKAGE_VERSION}" \
+            --notes-file release_notes.md \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish Summary
         if: steps.changesets.outputs.published == 'true'
         run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
           echo "🎉 Successfully published packages!"
           echo "📦 NPM: https://www.npmjs.com/package/gh-labeler"
           echo "🦀 Crates.io: https://crates.io/crates/gh-labeler"
+          echo "🏷️ GitHub Release: https://github.com/${{ github.repository }}/releases/tag/v${PACKAGE_VERSION}"
 
       - name: Dry Run Summary
         if: github.event.inputs.dry_run == 'true'
