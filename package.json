@@ -49,7 +49,7 @@
     "build:ts": "tsc scripts/post-install.ts --outDir scripts --target ES2022 --module CommonJS --moduleResolution node",
     "test": "cargo test",
     "prepare": "npm run build:ts && cargo build --release && cp target/release/gh-labeler bin/gh-labeler",
-    "postinstall": "node scripts/post-install.js",
+    "postinstall": "test \"$CI\" = \"true\" || node scripts/post-install.js",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "version": "changeset version && pnpm run sync-versions",

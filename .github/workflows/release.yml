@@ -44,11 +44,14 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install Node.js Dependencies
-        run: pnpm install
+      - name: Install Node.js Dependencies (without scripts)
+        run: pnpm install --ignore-scripts
 
       - name: Build TypeScript
         run: pnpm run build:ts
+
+      - name: Run postinstall script
+        run: pnpm run postinstall
 
       - name: Check Changesets Status (Dry Run)
         if: github.event.inputs.dry_run == 'true'
