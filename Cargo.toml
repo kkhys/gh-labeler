@@ -20,7 +20,7 @@ license = "MIT"
 name = "gh-labeler"
 readme = "README.md"
 repository = "https://github.com/kkhys/gh-labeler"
-version = "0.1.6"
+version = "0.1.7"
 
 [[bin]]
 name = "gh-labeler"
