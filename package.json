@@ -67,7 +67,7 @@
     "@changesets/get-github-info": "0.6.0",
     "@types/node": "24.5.2",
     "dotenv": "17.2.2",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   },
   "packageManager": "pnpm@10.16.1",
   "volta": {
