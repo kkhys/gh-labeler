@@ -62,7 +62,7 @@
     "publish:dry-run": "echo 'Dry run: npm publish' && pnpm publish --dry-run && echo 'Dry run: cargo publish' && cargo publish --dry-run"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.4",
+    "@biomejs/biome": "2.4.4",
     "@changesets/cli": "2.29.8",
     "@changesets/get-github-info": "0.6.0",
     "@types/node": "24.5.2",
