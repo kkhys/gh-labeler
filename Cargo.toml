@@ -27,26 +27,16 @@ name = "gh-labeler"
 path = "src/main.rs"
 
 [dependencies]
-# Core dependencies
-anyhow     = "1.0"
-reqwest    = { version = "0.12", features = ["json"] }
-serde      = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-serde_yaml = "0.9"
-thiserror  = "2.0"
-tokio      = { version = "1.0", features = ["full"] }
-
-# CLI dependencies
-clap    = { version = "4.0", features = ["derive"] }
-colored = "3.0"
-
-# GitHub API
+async-trait = "0.1"
+chrono      = { version = "0.4", features = ["serde"] }
+clap        = { version = "4.0", features = ["derive"] }
+colored     = "3.0"
 octocrab = "0.45"
+serde       = { version = "1.0", features = ["derive"] }
+serde_json  = "1.0"
+serde_yaml  = "0.9"
+thiserror   = "2.0"
+tokio       = { version = "1.0", features = ["full"] }
 
-# Configuration validation
-jsonschema = "0.33"
-
-# Utilities
-chrono  = { version = "0.4", features = ["serde"] }
-futures = "0.3"
-url     = "2.4"
+[dev-dependencies]
+tempfile = "3"
