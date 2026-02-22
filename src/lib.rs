@@ -11,11 +11,12 @@
 pub mod config;
 pub mod error;
 pub mod github;
+pub mod similarity;
 pub mod sync;
 
 pub use config::{LabelConfig, SyncConfig};
 pub use error::{Error, Result};
-pub use github::GitHubClient;
+pub use github::{GitHubClient, LabelService};
 pub use sync::LabelSyncer;
 
 /// Main functionality of gh-labeler
@@ -28,7 +29,7 @@ pub use sync::LabelSyncer;
 /// use gh_labeler::{SyncConfig, LabelSyncer};
 ///
 /// #[tokio::main]
-/// async fn main() -> anyhow::Result<()> {
+/// async fn main() -> gh_labeler::Result<()> {
 ///     let config = SyncConfig {
 ///         access_token: "your_github_token".to_string(),
 ///         repository: "owner/repo".to_string(),
@@ -36,10 +37,10 @@ pub use sync::LabelSyncer;
 ///         allow_added_labels: true,
 ///         labels: None,
 ///     };
-///     
+///
 ///     let syncer = LabelSyncer::new(config).await?;
 ///     let result = syncer.sync_labels().await?;
-///     
+///
 ///     println!("Sync completed: {:?}", result);
 ///     Ok(())
 /// }
