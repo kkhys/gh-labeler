@@ -1,6 +1,6 @@
 # gh-labeler
 
-🦀 A fast and reliable GitHub repository label management tool built with Rust.
+> A fast and reliable GitHub label management tool, built with Rust.
 
 [![Crates.io](https://img.shields.io/crates/v/gh-labeler?style=flat-square)](https://crates.io/crates/gh-labeler)
 [![Crates.io](https://img.shields.io/crates/d/gh-labeler?style=flat-square&label=crate%20downloads)](https://crates.io/crates/gh-labeler)
@@ -8,74 +8,96 @@
 [![npm version](https://img.shields.io/npm/v/gh-labeler?style=flat-square)](https://www.npmjs.com/package/gh-labeler)
 [![npm downloads](https://img.shields.io/npm/d18m/gh-labeler?style=flat-square&label=npm%20downloads)](https://www.npmjs.com/package/gh-labeler)
 
+---
+
 ## Features
 
-- 🔄 **Smart Synchronization**: Minimize destructive operations by intelligently renaming similar labels
-- 🏷️ **Alias Support**: Define aliases for labels to prevent unnecessary deletions
-- 🔍 **Dry Run Mode**: Preview changes before applying them
-- ⚙️ **Flexible Configuration**: Support for JSON and YAML configuration files
-- 🚀 **Fast Performance**: Built with Rust for speed and reliability
-- 📊 **Detailed Reporting**: Comprehensive sync reports with operation details
-- 🎯 **CLI & Library**: Use as a command-line tool or integrate as a library
+- Smart sync — Renames similar labels instead of deleting them (Levenshtein-based)
+- Alias support — Map old label names to new ones seamlessly
+- Dry run — Preview every change before it touches your repo
+- JSON / YAML — Bring your own config format
+- CLI & library — Use standalone or embed in your Rust project
 
 ## Installation
 
-### npm (Recommended)
+### npm (recommended)
 
 ```bash
-# Install globally
 npm install -g gh-labeler
 
-# Or run directly with npx
+# or run directly
 npx gh-labeler --help
 ```
 
-### Cargo (Rust)
+### Cargo
 
 ```bash
 cargo install gh-labeler
 ```
 
-### Download Binary
+### Binary
 
-Download the latest binary from [GitHub Releases](https://github.com/kkhys/gh-labeler/releases).
+Download from [GitHub Releases](https://github.com/kkhys/gh-labeler/releases).
+
+---
 
 ## Quick Start
 
-1. **Generate a GitHub Personal Access Token** with `repo` scope
-2. **Create a configuration file** (optional):
-
 ```bash
+# 1. Generate a default config
 gh-labeler init --format json > labels.json
-```
 
-3. **Sync your repository**:
+# 2. Preview changes
+gh-labeler preview -t $GITHUB_TOKEN -r owner/repo -c labels.json
 
-```bash
-gh-labeler sync -t YOUR_GITHUB_TOKEN -r owner/repo -c labels.json
+# 3. Apply
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo -c labels.json
 ```
 
 ## Usage
 
-### Basic Commands
+```
+gh-labeler [COMMAND] [OPTIONS]
 
-```bash
-# Sync with default labels
-gh-labeler sync -t TOKEN -r owner/repo
+Commands:
+  sync      Synchronize repository labels
+  preview   Preview sync operations (dry-run)
+  init      Generate default configuration
+  list      List current repository labels
+  help      Show help information
 
-# Preview changes (dry-run)
-gh-labeler preview -t TOKEN -r owner/repo
-
-# Generate default configuration
-gh-labeler init --format json
-
-# List current repository labels
-gh-labeler list -t TOKEN -r owner/repo
+Options:
+  -t, --access-token <TOKEN>   GitHub access token
+  -r, --repository <REPO>      Repository (owner/repo format)
+  -c, --config <FILE>          Configuration file path
+      --dry-run                Preview mode (no changes applied)
+      --allow-added-labels     Keep labels not in configuration
+  -v, --verbose                Verbose output
+  -h, --help                   Show help information
 ```
 
-### Configuration File
+### Environment Variables
 
-Create a `labels.json` or `labels.yaml` file:
+```bash
+export GITHUB_TOKEN=your_token_here
+gh-labeler sync -r owner/repo
+```
+
+---
+
+## Configuration
+
+### Schema
+
+| Field         | Type     | Required | Description                             |
+|---------------|----------|----------|-----------------------------------------|
+| `name`        | string   | yes      | Label name                              |
+| `color`       | string   | yes      | Hex color code (with `#` prefix)        |
+| `description` | string   | no       | Label description                       |
+| `aliases`     | string[] | no       | Alternative names for rename detection  |
+| `delete`      | boolean  | no       | Mark label for deletion                 |
+
+### JSON
 
 ```json
 [
@@ -87,7 +109,7 @@ Create a `labels.json` or `labels.yaml` file:
   },
   {
     "name": "enhancement",
-    "color": "#a2eeef", 
+    "color": "#a2eeef",
     "description": "New feature or request",
     "aliases": ["feature"]
   },
@@ -100,49 +122,7 @@ Create a `labels.json` or `labels.yaml` file:
 ]
 ```
 
-### Command Line Options
-
-```bash
-gh-labeler [COMMAND] [OPTIONS]
-
-Commands:
-  sync     Synchronize repository labels
-  preview  Preview sync operations (dry-run)
-  init     Generate default configuration
-  list     List current repository labels
-  help     Show help information
-
-Options:
-  -t, --access-token <TOKEN>  GitHub access token
-  -r, --repository <REPO>     Repository (owner/repo format)
-  -c, --config <FILE>         Configuration file path
-  --dry-run                   Preview mode (no changes)
-  --allow-added-labels        Keep labels not in configuration
-  -v, --verbose               Verbose output
-  -h, --help                  Show help information
-```
-
-### Environment Variables
-
-```bash
-# Set GitHub token via environment variable
-export GITHUB_TOKEN=your_token_here
-gh-labeler sync -r owner/repo
-```
-
-## Configuration Format
-
-### Label Configuration
-
-| Field         | Type    | Required | Description                             |
-|---------------|---------|----------|-----------------------------------------|
-| `name`        | string  | ✅        | Label name                              |
-| `color`       | string  | ✅        | Hex color code (with # prefix required) |
-| `description` | string  | ❌        | Label description                       |
-| `aliases`     | array   | ❌        | Alternative names for the label         |
-| `delete`      | boolean | ❌        | Mark label for deletion                 |
-
-### Example YAML Configuration
+### YAML
 
 ```yaml
 - name: "priority: high"
@@ -158,51 +138,38 @@ gh-labeler sync -r owner/repo
 - name: "status: wontfix"
   color: "#cccccc"
   description: "This will not be worked on"
-  delete: true  # Mark for deletion
+  delete: true
 ```
+
+---
 
 ## Examples
 
-### Sync with Custom Labels
-
 ```bash
-# Using JSON configuration
-gh-labeler sync \\
-  --access-token ghp_xxxxxxxxxxxx \\
-  --repository myorg/myproject \\
+# Sync with a custom config
+gh-labeler sync \
+  --access-token ghp_xxxxxxxxxxxx \
+  --repository myorg/myproject \
   --config my-labels.json
 
-# Using YAML configuration  
-gh-labeler sync \\
-  --access-token ghp_xxxxxxxxxxxx \\
-  --repository myorg/myproject \\
-  --config labels.yaml
-```
+# Verbose preview
+gh-labeler preview \
+  -t $GITHUB_TOKEN \
+  -r owner/repo \
+  -c labels.json \
+  --verbose
 
-### Preview Changes
-
-```bash
-# See what changes would be made
-gh-labeler preview -t $GITHUB_TOKEN -r owner/repo -c labels.json
-
-# Verbose preview with detailed operations
-gh-labeler preview -t $GITHUB_TOKEN -r owner/repo -c labels.json --verbose
-```
-
-### Preserve Additional Labels
-
-```bash
-# Keep labels that aren't in your configuration
-gh-labeler sync \\
-  --access-token $GITHUB_TOKEN \\
-  --repository owner/repo \\
-  --config labels.json \\
+# Keep unlisted labels alive
+gh-labeler sync \
+  -t $GITHUB_TOKEN \
+  -r owner/repo \
+  -c labels.json \
   --allow-added-labels
 ```
 
-## Library Usage
+---
 
-You can also use gh-labeler as a Rust library in your projects:
+## Library Usage
 
 ```toml
 [dependencies]
@@ -227,62 +194,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let syncer = LabelSyncer::new(config).await?;
     let result = syncer.sync_labels().await?;
-    
-    println!("Sync completed! Created: {}, Updated: {}, Deleted: {}", 
-             result.created, result.updated, result.deleted);
-    
+
+    println!(
+        "Created: {}, Updated: {}, Deleted: {}",
+        result.created, result.updated, result.deleted
+    );
+
     Ok(())
 }
 ```
 
-## Performance Benefits
-
-| Aspect         | gh-labeler (Rust)        |
-|----------------|--------------------------|
-| Performance    | ⚡⚡⚡ Lightning fast       |
-| Memory Usage   | 📊📊📊 Minimal footprint |
-| Binary Size    | 📦 Compact single binary |
-| Startup Time   | 🚀 Instant startup       |
-| Cross-platform | ✅ Windows, macOS, Linux  |
-| Configuration  | JSON + YAML support      |
-| Dry-run        | ✅ Safe preview mode      |
-| Verbose output | Detailed operations      |
+---
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development
-
 ```bash
-# Clone the repository
 git clone https://github.com/kkhys/gh-labeler.git
 cd gh-labeler
-
-# Build the project
 cargo build
-
-# Run tests
 cargo test
-
-# Install locally
-cargo install --path .
-
-# Test npm package locally
-npm pack
-npm install -g gh-labeler-0.1.0.tgz
 ```
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes
+4. Push and open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+MIT — see [LICENSE.md](LICENSE.md) for details.
 
 ## Acknowledgments
 
-- GitHub API via [octocrab](https://github.com/XAMPPRocky/octocrab)
-- CLI interface via [clap](https://github.com/clap-rs/clap)
-- Built with love in Rust 🦀
+- [octocrab](https://github.com/XAMPPRocky/octocrab) — GitHub API client
+- [clap](https://github.com/clap-rs/clap) — CLI framework
