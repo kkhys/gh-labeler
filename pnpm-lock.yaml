@@ -21,8 +21,8 @@ importers:
         specifier: 24.5.2
         version: 24.5.2
       dotenv:
-        specifier: 17.2.2
-        version: 17.2.2
+        specifier: 17.3.1
+        version: 17.3.1
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -225,8 +225,8 @@ packages:
     resolution: {integrity: sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==}
     engines: {node: '>=8'}
 
-  dotenv@17.2.2:
-    resolution: {integrity: sha512-Sf2LSQP+bOlhKWWyhFsn0UsfdK/kCWRv1iuA2gXAwt3dyNabr6QSj00I2V10pidqz69soatm9ZwZvpQMTIOd5Q==}
+  dotenv@17.3.1:
+    resolution: {integrity: sha512-IO8C/dzEb6O3F9/twg6ZLXz164a2fhTnEWb95H23Dm4OuN+92NmEAlTrupP9VW6Jm3sO26tQlqyvyi4CsnY9GA==}
     engines: {node: '>=12'}
 
   enquirer@2.4.1:
@@ -765,7 +765,7 @@ snapshots:
     dependencies:
       path-type: 4.0.0
 
-  dotenv@17.2.2: {}
+  dotenv@17.3.1: {}
 
   enquirer@2.4.1:
     dependencies:
