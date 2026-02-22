@@ -115,9 +115,7 @@ impl SyncConfig {
             return Err(Error::config_validation("Access token is required"));
         }
 
-        if !is_valid_repository_format(&self.repository) {
-            return Err(Error::InvalidRepositoryFormat(self.repository.clone()));
-        }
+        parse_repository(&self.repository)?;
 
         if let Some(labels) = &self.labels {
             for label in labels {
@@ -130,13 +128,23 @@ impl SyncConfig {
 
     /// Get repository owner and name
     pub fn parse_repository(&self) -> Result<(String, String)> {
-        let parts: Vec<&str> = self.repository.split('/').collect();
-        if parts.len() != 2 {
-            return Err(Error::InvalidRepositoryFormat(self.repository.clone()));
-        }
-
-        Ok((parts[0].to_string(), parts[1].to_string()))
+        parse_repository(&self.repository)
     }
+}
+
+/// Parse repository string into owner and name
+///
+/// # Arguments
+/// - `repo`: Repository string in "owner/repo" format
+///
+/// # Errors
+/// Returns an error if the format is invalid
+pub fn parse_repository(repo: &str) -> Result<(String, String)> {
+    let parts: Vec<&str> = repo.split('/').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() {
+        return Err(Error::InvalidRepositoryFormat(repo.to_string()));
+    }
+    Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
 /// Generate default label configuration
@@ -242,18 +250,6 @@ fn is_valid_hex_color(color: &str) -> bool {
     color.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// Validate repository format
-///
-/// # Arguments
-/// - `repo`: Repository name (owner/repo format)
-///
-/// # Returns
-/// True if valid
-fn is_valid_repository_format(repo: &str) -> bool {
-    let parts: Vec<&str> = repo.split('/').collect();
-    parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,14 +266,14 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_repository_format() {
-        assert!(is_valid_repository_format("owner/repo"));
-        assert!(is_valid_repository_format("org/project"));
+    fn test_parse_repository() {
+        assert!(parse_repository("owner/repo").is_ok());
+        assert!(parse_repository("org/project").is_ok());
 
-        assert!(!is_valid_repository_format("repo")); // No slash
-        assert!(!is_valid_repository_format("/repo")); // No owner
-        assert!(!is_valid_repository_format("owner/")); // No repo name
-        assert!(!is_valid_repository_format("owner/repo/sub")); // Too many parts
+        assert!(parse_repository("repo").is_err()); // No slash
+        assert!(parse_repository("/repo").is_err()); // No owner
+        assert!(parse_repository("owner/").is_err()); // No repo name
+        assert!(parse_repository("owner/repo/sub").is_err()); // Too many parts
     }
 
     #[test]
@@ -298,5 +294,101 @@ mod tests {
         // Invalid hex with # should also fail
         let invalid_hex_with_hash = LabelConfig::new("test".to_string(), "#invalid".to_string());
         assert!(invalid_hex_with_hash.is_err());
+    }
+
+    #[test]
+    fn test_sync_config_empty_token_error() {
+        let config = SyncConfig {
+            access_token: "".to_string(),
+            repository: "owner/repo".to_string(),
+            dry_run: false,
+            allow_added_labels: false,
+            labels: None,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_sync_config_invalid_repo_format_error() {
+        let config = SyncConfig {
+            access_token: "token".to_string(),
+            repository: "invalid".to_string(),
+            dry_run: false,
+            allow_added_labels: false,
+            labels: None,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_sync_config_invalid_label_color_error() {
+        let config = SyncConfig {
+            access_token: "token".to_string(),
+            repository: "owner/repo".to_string(),
+            dry_run: false,
+            allow_added_labels: false,
+            labels: Some(vec![LabelConfig {
+                name: "test".to_string(),
+                color: "invalid".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            }]),
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_sync_config_valid() {
+        let config = SyncConfig {
+            access_token: "token".to_string(),
+            repository: "owner/repo".to_string(),
+            dry_run: false,
+            allow_added_labels: false,
+            labels: Some(vec![LabelConfig {
+                name: "bug".to_string(),
+                color: "#ff0000".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            }]),
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_load_valid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.json");
+        std::fs::write(&path, r##"[{"name":"bug","color":"#ff0000"}]"##).unwrap();
+        let labels = load_labels_from_json(&path).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_load_valid_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.yaml");
+        std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
+        let labels = load_labels_from_yaml(&path).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_load_invalid_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.json");
+        std::fs::write(&path, "not json").unwrap();
+        assert!(load_labels_from_json(&path).is_err());
+    }
+
+    #[test]
+    fn test_load_json_with_invalid_color() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.json");
+        std::fs::write(&path, r##"[{"name":"bug","color":"invalid"}]"##).unwrap();
+        assert!(load_labels_from_json(&path).is_err());
     }
 }

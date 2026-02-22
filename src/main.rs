@@ -7,9 +7,9 @@ use colored::Colorize;
 use std::path::PathBuf;
 
 use gh_labeler::{
-    config::{default_labels, load_labels_from_json, load_labels_from_yaml, SyncConfig},
+    config::{default_labels, load_labels_from_json, load_labels_from_yaml, parse_repository},
     sync::LabelSyncer,
-    Error, Result,
+    Error, LabelConfig, LabelService, Result, SyncConfig,
 };
 
 /// gh-labeler CLI
@@ -28,23 +28,23 @@ struct Cli {
     command: Option<Commands>,
 
     /// GitHub access token
-    #[arg(short = 't', long)]
+    #[arg(short = 't', long, global = true)]
     access_token: Option<String>,
 
     /// Target repository (owner/repo format)
-    #[arg(short = 'r', long)]
+    #[arg(short = 'r', long, global = true)]
     repository: Option<String>,
 
     /// Dry run mode (don't make actual changes)
-    #[arg(long)]
+    #[arg(long, global = true)]
     dry_run: bool,
 
     /// Preserve labels not in configuration
-    #[arg(long)]
+    #[arg(long, global = true)]
     allow_added_labels: bool,
 
     /// Configuration file path (JSON/YAML)
-    #[arg(short = 'c', long)]
+    #[arg(short = 'c', long, global = true)]
     config: Option<PathBuf>,
 
     /// Verbose output
@@ -55,46 +55,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Synchronize labels
-    Sync {
-        /// GitHub access token
-        #[arg(short = 't', long)]
-        access_token: Option<String>,
-
-        /// Target repository (owner/repo format)
-        #[arg(short = 'r', long)]
-        repository: String,
-
-        /// Configuration file path (JSON/YAML)
-        #[arg(short = 'c', long)]
-        config: Option<PathBuf>,
-
-        /// Dry run mode (don't make actual changes)
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Preserve labels not in configuration
-        #[arg(long)]
-        allow_added_labels: bool,
-    },
+    Sync,
 
     /// Preview synchronization content
-    Preview {
-        /// GitHub access token
-        #[arg(short = 't', long)]
-        access_token: Option<String>,
-
-        /// Target repository (owner/repo format)
-        #[arg(short = 'r', long)]
-        repository: String,
-
-        /// Configuration file path (JSON/YAML)
-        #[arg(short = 'c', long)]
-        config: Option<PathBuf>,
-
-        /// Preserve labels not in configuration
-        #[arg(long)]
-        allow_added_labels: bool,
-    },
+    Preview,
 
     /// Output default configuration
     Init {
@@ -109,14 +73,6 @@ enum Commands {
 
     /// Display current labels
     List {
-        /// GitHub access token
-        #[arg(short = 't', long)]
-        access_token: Option<String>,
-
-        /// Target repository (owner/repo format)
-        #[arg(short = 'r', long)]
-        repository: String,
-
         /// Output format
         #[arg(long, default_value = "table", value_parser = ["table", "json", "yaml"])]
         format: String,
@@ -128,41 +84,32 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Sync {
-            access_token,
-            repository,
-            config,
-            dry_run,
-            allow_added_labels,
-        }) => {
-            let token = get_access_token(access_token, cli.access_token)?;
-            let labels = load_label_config(config.or(cli.config)).await?;
+        Some(Commands::Sync) => {
+            let token = get_access_token(cli.access_token)?;
+            let repository = require_repository(cli.repository)?;
+            let labels = load_label_config(cli.config).await?;
 
             let sync_config = SyncConfig {
                 access_token: token,
                 repository,
-                dry_run,
-                allow_added_labels,
+                dry_run: cli.dry_run,
+                allow_added_labels: cli.allow_added_labels,
                 labels: Some(labels),
             };
 
             run_sync(sync_config, cli.verbose).await
         }
 
-        Some(Commands::Preview {
-            access_token,
-            repository,
-            config,
-            allow_added_labels,
-        }) => {
-            let token = get_access_token(access_token, cli.access_token)?;
-            let labels = load_label_config(config.or(cli.config)).await?;
+        Some(Commands::Preview) => {
+            let token = get_access_token(cli.access_token)?;
+            let repository = require_repository(cli.repository)?;
+            let labels = load_label_config(cli.config).await?;
 
             let sync_config = SyncConfig {
                 access_token: token,
                 repository,
                 dry_run: true,
-                allow_added_labels,
+                allow_added_labels: cli.allow_added_labels,
                 labels: Some(labels),
             };
 
@@ -171,21 +118,17 @@ async fn main() -> Result<()> {
 
         Some(Commands::Init { format, output }) => run_init(format, output).await,
 
-        Some(Commands::List {
-            access_token,
-            repository,
-            format,
-        }) => {
-            let token = get_access_token(access_token, cli.access_token)?;
+        Some(Commands::List { format }) => {
+            let token = get_access_token(cli.access_token)?;
+            let repository = require_repository(cli.repository)?;
             run_list(token, repository, format).await
         }
 
         None => {
             // Default sync mode (traditional behavior)
-            if let (Some(token), Some(repo)) = (
-                get_access_token(cli.access_token.clone(), None).ok(),
-                cli.repository,
-            ) {
+            if let (Some(token), Some(repo)) =
+                (get_access_token(cli.access_token).ok(), cli.repository)
+            {
                 let labels = load_label_config(cli.config).await?;
 
                 let sync_config = SyncConfig {
@@ -232,9 +175,9 @@ async fn run_sync(config: SyncConfig, verbose: bool) -> Result<()> {
     // Display results
     display_sync_result(&result, verbose);
 
-    if !result.errors.is_empty() {
+    if !result.errors().is_empty() {
         eprintln!("\n{} Errors occurred:", "✗".red());
-        for error in &result.errors {
+        for error in result.errors() {
             eprintln!("  {}", error.red());
         }
         std::process::exit(1);
@@ -248,11 +191,9 @@ async fn run_init(format: String, output: Option<PathBuf>) -> Result<()> {
     let labels = default_labels();
 
     let content = match format.as_str() {
-        "json" => serde_json::to_string_pretty(&labels)
-            .map_err(|e| Error::generic(format!("JSON serialization failed: {}", e)))?,
-        "yaml" => serde_yaml::to_string(&labels)
-            .map_err(|e| Error::generic(format!("YAML serialization failed: {}", e)))?,
-        _ => return Err(Error::generic("Unsupported format")),
+        "json" => serde_json::to_string_pretty(&labels)?,
+        "yaml" => serde_yaml::to_string(&labels)?,
+        _ => return Err(Error::config_validation("Unsupported format")),
     };
 
     if let Some(output_path) = output {
@@ -303,7 +244,7 @@ async fn run_list(access_token: String, repository: String, format: String) -> R
             let yaml = serde_yaml::to_string(&labels)?;
             println!("{}", yaml);
         }
-        _ => return Err(Error::generic("Unsupported format")),
+        _ => return Err(Error::config_validation("Unsupported format")),
     }
 
     Ok(())
@@ -311,7 +252,7 @@ async fn run_list(access_token: String, repository: String, format: String) -> R
 
 /// Display synchronization results
 fn display_sync_result(result: &gh_labeler::sync::SyncResult, verbose: bool) {
-    if result.dry_run && result.has_changes() {
+    if result.dry_run() && result.has_changes() {
         println!("\n{} Sync preview (dry-run mode):", "📋".to_string().blue());
     } else if result.has_changes() {
         println!("\n{} Sync completed:", "✓".green());
@@ -320,15 +261,15 @@ fn display_sync_result(result: &gh_labeler::sync::SyncResult, verbose: bool) {
     }
 
     // Display statistics
-    println!("  📝 Created: {}", result.created.to_string().green());
-    println!("  🔄 Updated: {}", result.updated.to_string().yellow());
-    println!("  🗑️ Deleted: {}", result.deleted.to_string().red());
-    println!("  📛 Renamed: {}", result.renamed.to_string().blue());
-    println!("  ➖ Unchanged: {}", result.unchanged.to_string().white());
+    println!("  📝 Created: {}", result.created().to_string().green());
+    println!("  🔄 Updated: {}", result.updated().to_string().yellow());
+    println!("  🗑️ Deleted: {}", result.deleted().to_string().red());
+    println!("  📛 Renamed: {}", result.renamed().to_string().blue());
+    println!("  ➖ Unchanged: {}", result.unchanged().to_string().white());
 
     if verbose {
         println!("\n{} Detailed operations:", "📋".blue());
-        for (i, operation) in result.operations.iter().enumerate() {
+        for (i, operation) in result.operations().iter().enumerate() {
             let prefix = format!("  {}.", i + 1);
             match operation {
                 gh_labeler::sync::SyncOperation::Create { label } => {
@@ -388,10 +329,16 @@ fn display_sync_result(result: &gh_labeler::sync::SyncResult, verbose: bool) {
     }
 }
 
+/// Require a repository argument
+fn require_repository(repo: Option<String>) -> Result<String> {
+    repo.ok_or_else(|| {
+        Error::config_validation("Repository is required. Use -r or --repository flag")
+    })
+}
+
 /// Get access token
-fn get_access_token(arg_token: Option<String>, cli_token: Option<String>) -> Result<String> {
+fn get_access_token(arg_token: Option<String>) -> Result<String> {
     arg_token
-        .or(cli_token)
         .or_else(|| std::env::var("GITHUB_TOKEN").ok())
         .ok_or_else(|| Error::config_validation(
             "GitHub access token is required. Set via --access-token, GITHUB_TOKEN env var, or -t flag"
@@ -399,33 +346,25 @@ fn get_access_token(arg_token: Option<String>, cli_token: Option<String>) -> Res
 }
 
 /// Load label configuration
-async fn load_label_config(config_path: Option<PathBuf>) -> Result<Vec<gh_labeler::LabelConfig>> {
+async fn load_label_config(config_path: Option<PathBuf>) -> Result<Vec<LabelConfig>> {
     match config_path {
         Some(path) => {
             if !path.exists() {
-                return Err(Error::generic(format!(
-                    "Configuration file not found: {}",
-                    path.display()
-                )));
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("Configuration file not found: {}", path.display()),
+                )
+                .into());
             }
 
             match path.extension().and_then(|ext| ext.to_str()) {
                 Some("json") => load_labels_from_json(&path),
                 Some("yaml") | Some("yml") => load_labels_from_yaml(&path),
-                _ => Err(Error::generic(
+                _ => Err(Error::config_validation(
                     "Configuration file must be .json, .yaml, or .yml",
                 )),
             }
         }
         None => Ok(default_labels()),
     }
-}
-
-/// Parse repository format
-fn parse_repository(repo: &str) -> Result<(String, String)> {
-    let parts: Vec<&str> = repo.split('/').collect();
-    if parts.len() != 2 {
-        return Err(Error::InvalidRepositoryFormat(repo.to_string()));
-    }
-    Ok((parts[0].to_string(), parts[1].to_string()))
 }
