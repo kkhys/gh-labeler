@@ -368,3 +368,205 @@ async fn load_label_config(config_path: Option<PathBuf>) -> Result<Vec<LabelConf
         None => Ok(default_labels()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- get_access_token tests ---
+    // Environment variable tests must run serially to avoid race conditions.
+    // Combining them into a single test ensures sequential execution.
+
+    #[test]
+    fn test_get_access_token_from_arg() {
+        let result = get_access_token(Some("my-token".to_string()));
+        assert_eq!(result.unwrap(), "my-token");
+    }
+
+    #[test]
+    fn test_get_access_token_env_variants() {
+        // Save original value to restore later
+        let original = std::env::var("GITHUB_TOKEN").ok();
+
+        // Test: env var is used when no arg provided
+        std::env::set_var("GITHUB_TOKEN", "env-token");
+        let result = get_access_token(None);
+        assert_eq!(result.unwrap(), "env-token");
+
+        // Test: arg takes precedence over env var
+        let result = get_access_token(Some("arg-token".to_string()));
+        assert_eq!(result.unwrap(), "arg-token");
+
+        // Test: error when neither arg nor env var is set
+        std::env::remove_var("GITHUB_TOKEN");
+        let result = get_access_token(None);
+        assert!(result.is_err());
+
+        // Restore original value
+        if let Some(val) = original {
+            std::env::set_var("GITHUB_TOKEN", val);
+        }
+    }
+
+    // --- require_repository tests ---
+
+    #[test]
+    fn test_require_repository_some() {
+        let result = require_repository(Some("owner/repo".to_string()));
+        assert_eq!(result.unwrap(), "owner/repo");
+    }
+
+    #[test]
+    fn test_require_repository_none() {
+        let result = require_repository(None);
+        assert!(result.is_err());
+    }
+
+    // --- load_label_config tests ---
+
+    #[tokio::test]
+    async fn test_load_label_config_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.json");
+        std::fs::write(&path, r##"[{"name":"bug","color":"#ff0000"}]"##).unwrap();
+        let labels = load_label_config(Some(path)).await.unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[tokio::test]
+    async fn test_load_label_config_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.yaml");
+        std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
+        let labels = load_label_config(Some(path)).await.unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[tokio::test]
+    async fn test_load_label_config_yml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.yml");
+        std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
+        let labels = load_label_config(Some(path)).await.unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[tokio::test]
+    async fn test_load_label_config_invalid_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.toml");
+        std::fs::write(&path, "").unwrap();
+        let result = load_label_config(Some(path)).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_load_label_config_file_not_found() {
+        let path = PathBuf::from("/nonexistent/labels.json");
+        let result = load_label_config(Some(path)).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_load_label_config_none_returns_defaults() {
+        let labels = load_label_config(None).await.unwrap();
+        assert_eq!(labels, default_labels());
+    }
+
+    // --- display_sync_result tests ---
+
+    #[test]
+    fn test_display_sync_result_with_changes() {
+        use gh_labeler::sync::{SyncOperation, SyncResult};
+
+        let mut result = SyncResult::new(false);
+        result.add_operation(SyncOperation::Create {
+            label: LabelConfig {
+                name: "bug".to_string(),
+                color: "#ff0000".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            },
+        });
+        // Should not panic
+        display_sync_result(&result, false);
+    }
+
+    #[test]
+    fn test_display_sync_result_no_changes() {
+        use gh_labeler::sync::SyncResult;
+
+        let result = SyncResult::new(false);
+        // Should not panic
+        display_sync_result(&result, false);
+    }
+
+    #[test]
+    fn test_display_sync_result_dry_run() {
+        use gh_labeler::sync::{SyncOperation, SyncResult};
+
+        let mut result = SyncResult::new(true);
+        result.add_operation(SyncOperation::Create {
+            label: LabelConfig {
+                name: "bug".to_string(),
+                color: "#ff0000".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            },
+        });
+        // Should not panic
+        display_sync_result(&result, false);
+    }
+
+    #[test]
+    fn test_display_sync_result_verbose() {
+        use gh_labeler::sync::{SyncOperation, SyncResult};
+
+        let mut result = SyncResult::new(false);
+        result.add_operation(SyncOperation::Create {
+            label: LabelConfig {
+                name: "new-label".to_string(),
+                color: "#ff0000".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            },
+        });
+        result.add_operation(SyncOperation::Update {
+            current_name: "old".to_string(),
+            new_label: LabelConfig {
+                name: "old".to_string(),
+                color: "#00ff00".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            },
+            changes: vec!["color: #ff0000 -> #00ff00".to_string()],
+        });
+        result.add_operation(SyncOperation::Delete {
+            name: "removed".to_string(),
+            reason: "Not in config".to_string(),
+        });
+        result.add_operation(SyncOperation::Rename {
+            current_name: "defect".to_string(),
+            new_name: "bug".to_string(),
+            new_label: LabelConfig {
+                name: "bug".to_string(),
+                color: "#d73a4a".to_string(),
+                description: None,
+                aliases: Vec::new(),
+                delete: false,
+            },
+        });
+        result.add_operation(SyncOperation::NoChange {
+            name: "unchanged".to_string(),
+        });
+        // Should not panic
+        display_sync_result(&result, true);
+    }
+}
