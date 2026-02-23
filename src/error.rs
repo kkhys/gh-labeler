@@ -41,6 +41,12 @@ pub enum Error {
 
     #[error("No configuration file found. Searched for: {searched_files}. Run `gh-labeler init` to create one.")]
     ConfigFileNotFound { searched_files: String },
+
+    #[error("Remote config file not found in {repo}. Searched for: {searched_files}")]
+    RemoteConfigNotFound {
+        repo: String,
+        searched_files: String,
+    },
 }
 
 impl Error {
