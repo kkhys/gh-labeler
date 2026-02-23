@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::config::{default_labels, LabelConfig, SyncConfig};
+use crate::config::{LabelConfig, SyncConfig};
 use crate::error::{Error, Result};
 use crate::github::{GitHubClient, GitHubLabel, LabelService};
 use crate::similarity::{calculate_label_similarity, SIMILARITY_THRESHOLD};
@@ -194,8 +194,12 @@ impl<S: LabelService> LabelSyncer<S> {
             .map(|label| (label.name.clone(), label))
             .collect();
 
-        // Target label configuration
-        let target_labels = self.config.labels.clone().unwrap_or_else(default_labels);
+        // Target label configuration (must be provided)
+        let target_labels = self
+            .config
+            .labels
+            .clone()
+            .ok_or_else(|| Error::config_validation("Label configuration is required"))?;
 
         // Create synchronization plan
         let operations = self.plan_sync_operations(&current_labels_map, &target_labels);
