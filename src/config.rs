@@ -2,9 +2,21 @@
 //!
 //! Label configuration and application settings management
 
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Error, Result};
+
+/// Convention-based configuration file names searched in order
+pub const CONVENTION_CONFIG_FILES: &[&str] = &[
+    ".gh-labeler.json",
+    ".gh-labeler.yaml",
+    ".gh-labeler.yml",
+    ".github/labels.json",
+    ".github/labels.yaml",
+    ".github/labels.yml",
+];
 
 /// Label Configuration
 ///
@@ -235,6 +247,62 @@ pub fn load_labels_from_yaml<P: AsRef<std::path::Path>>(path: P) -> Result<Vec<L
     Ok(labels)
 }
 
+/// Load label configuration from a file, detecting format by extension
+///
+/// # Arguments
+/// - `path`: Path to the configuration file (.json, .yaml, or .yml)
+///
+/// # Errors
+/// If file reading, parsing, or validation fails, or if the extension is unsupported
+pub fn load_labels_from_file<P: AsRef<Path>>(path: P) -> Result<Vec<LabelConfig>> {
+    let path = path.as_ref();
+
+    if !path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Configuration file not found: {}", path.display()),
+        )
+        .into());
+    }
+
+    match path.extension().and_then(|ext| ext.to_str()) {
+        Some("json") => load_labels_from_json(path),
+        Some("yaml") | Some("yml") => load_labels_from_yaml(path),
+        _ => Err(Error::config_validation(
+            "Configuration file must be .json, .yaml, or .yml",
+        )),
+    }
+}
+
+/// Search for a convention-based configuration file in the current directory
+///
+/// Searches for files in [`CONVENTION_CONFIG_FILES`] order and returns
+/// the first one found.
+///
+/// # Returns
+/// The path to the first matching file, or `None` if no file is found
+pub fn find_convention_config() -> Option<PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    find_convention_config_in(&cwd)
+}
+
+/// Search for a convention-based configuration file in the given directory
+///
+/// # Arguments
+/// - `dir`: Directory to search in
+///
+/// # Returns
+/// The path to the first matching file, or `None` if no file is found
+pub fn find_convention_config_in(dir: &Path) -> Option<PathBuf> {
+    for filename in CONVENTION_CONFIG_FILES {
+        let path = dir.join(filename);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    None
+}
+
 /// Validate hex color code
 ///
 /// # Arguments
@@ -404,5 +472,91 @@ mod tests {
         let path = dir.path().join("labels.json");
         std::fs::write(&path, r##"[{"name":"bug","color":"invalid"}]"##).unwrap();
         assert!(load_labels_from_json(&path).is_err());
+    }
+
+    // --- find_convention_config_in tests ---
+
+    #[test]
+    fn test_find_convention_config_priority_order() {
+        let dir = tempfile::tempdir().unwrap();
+        // Create multiple convention files
+        std::fs::write(
+            dir.path().join(".gh-labeler.yaml"),
+            "- name: a\n  color: \"#ff0000\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join(".gh-labeler.json"),
+            r##"[{"name":"b","color":"#ff0000"}]"##,
+        )
+        .unwrap();
+        // .gh-labeler.json should be found first (highest priority)
+        let found = find_convention_config_in(dir.path()).unwrap();
+        assert_eq!(found.file_name().unwrap(), ".gh-labeler.json");
+    }
+
+    #[test]
+    fn test_find_convention_config_github_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let github_dir = dir.path().join(".github");
+        std::fs::create_dir(&github_dir).unwrap();
+        std::fs::write(
+            github_dir.join("labels.yaml"),
+            "- name: a\n  color: \"#ff0000\"\n",
+        )
+        .unwrap();
+        let found = find_convention_config_in(dir.path()).unwrap();
+        assert!(found.ends_with(".github/labels.yaml"));
+    }
+
+    #[test]
+    fn test_find_convention_config_none_found() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(find_convention_config_in(dir.path()).is_none());
+    }
+
+    // --- load_labels_from_file tests ---
+
+    #[test]
+    fn test_load_labels_from_file_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.json");
+        std::fs::write(&path, r##"[{"name":"bug","color":"#ff0000"}]"##).unwrap();
+        let labels = load_labels_from_file(&path).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_load_labels_from_file_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.yaml");
+        std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
+        let labels = load_labels_from_file(&path).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_load_labels_from_file_yml() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.yml");
+        std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
+        let labels = load_labels_from_file(&path).unwrap();
+        assert_eq!(labels.len(), 1);
+    }
+
+    #[test]
+    fn test_load_labels_from_file_unsupported_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("labels.toml");
+        std::fs::write(&path, "").unwrap();
+        assert!(load_labels_from_file(&path).is_err());
+    }
+
+    #[test]
+    fn test_load_labels_from_file_not_found() {
+        let path = PathBuf::from("/nonexistent/labels.json");
+        assert!(load_labels_from_file(&path).is_err());
     }
 }
