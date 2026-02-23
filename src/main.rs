@@ -7,7 +7,10 @@ use colored::Colorize;
 use std::path::PathBuf;
 
 use gh_labeler::{
-    config::{default_labels, load_labels_from_json, load_labels_from_yaml, parse_repository},
+    config::{
+        default_labels, find_convention_config, load_labels_from_file, parse_repository,
+        CONVENTION_CONFIG_FILES,
+    },
     sync::LabelSyncer,
     Error, LabelConfig, LabelService, Result, SyncConfig,
 };
@@ -87,7 +90,7 @@ async fn main() -> Result<()> {
         Some(Commands::Sync) => {
             let token = get_access_token(cli.access_token)?;
             let repository = require_repository(cli.repository)?;
-            let labels = load_label_config(cli.config).await?;
+            let labels = load_label_config(cli.config)?;
 
             let sync_config = SyncConfig {
                 access_token: token,
@@ -103,7 +106,7 @@ async fn main() -> Result<()> {
         Some(Commands::Preview) => {
             let token = get_access_token(cli.access_token)?;
             let repository = require_repository(cli.repository)?;
-            let labels = load_label_config(cli.config).await?;
+            let labels = load_label_config(cli.config)?;
 
             let sync_config = SyncConfig {
                 access_token: token,
@@ -129,7 +132,7 @@ async fn main() -> Result<()> {
             if let (Some(token), Some(repo)) =
                 (get_access_token(cli.access_token).ok(), cli.repository)
             {
-                let labels = load_label_config(cli.config).await?;
+                let labels = load_label_config(cli.config)?;
 
                 let sync_config = SyncConfig {
                     access_token: token,
@@ -196,16 +199,26 @@ async fn run_init(format: String, output: Option<PathBuf>) -> Result<()> {
         _ => return Err(Error::config_validation("Unsupported format")),
     };
 
-    if let Some(output_path) = output {
-        std::fs::write(&output_path, content)?;
-        println!(
-            "{} Default configuration written to: {}",
-            "✓".green(),
-            output_path.display().to_string().cyan()
-        );
-    } else {
-        println!("{}", content);
+    let output_path = output.unwrap_or_else(|| {
+        PathBuf::from(format!(
+            ".gh-labeler.{}",
+            if format == "yaml" { "yaml" } else { &format }
+        ))
+    });
+
+    if output_path.exists() {
+        return Err(Error::config_validation(format!(
+            "File already exists: {}. Remove it first or use -o to specify a different path.",
+            output_path.display()
+        )));
     }
+
+    std::fs::write(&output_path, &content)?;
+    println!(
+        "{} Default configuration written to: {}",
+        "✓".green(),
+        output_path.display().to_string().cyan()
+    );
 
     Ok(())
 }
@@ -346,26 +359,23 @@ fn get_access_token(arg_token: Option<String>) -> Result<String> {
 }
 
 /// Load label configuration
-async fn load_label_config(config_path: Option<PathBuf>) -> Result<Vec<LabelConfig>> {
+///
+/// When a path is given explicitly via `-c`, load from that file.
+/// Otherwise, search for a convention-based config file and error if none is found.
+fn load_label_config(config_path: Option<PathBuf>) -> Result<Vec<LabelConfig>> {
     match config_path {
-        Some(path) => {
-            if !path.exists() {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("Configuration file not found: {}", path.display()),
-                )
-                .into());
-            }
-
-            match path.extension().and_then(|ext| ext.to_str()) {
-                Some("json") => load_labels_from_json(&path),
-                Some("yaml") | Some("yml") => load_labels_from_yaml(&path),
-                _ => Err(Error::config_validation(
-                    "Configuration file must be .json, .yaml, or .yml",
-                )),
-            }
+        Some(path) => load_labels_from_file(&path),
+        None => {
+            let path = find_convention_config().ok_or_else(|| Error::ConfigFileNotFound {
+                searched_files: CONVENTION_CONFIG_FILES.join(", "),
+            })?;
+            println!(
+                "{} Using config file: {}",
+                "•".blue(),
+                path.display().to_string().cyan()
+            );
+            load_labels_from_file(&path)
         }
-        None => Ok(default_labels()),
     }
 }
 
@@ -424,56 +434,128 @@ mod tests {
 
     // --- load_label_config tests ---
 
-    #[tokio::test]
-    async fn test_load_label_config_json() {
+    #[test]
+    fn test_load_label_config_json() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.json");
         std::fs::write(&path, r##"[{"name":"bug","color":"#ff0000"}]"##).unwrap();
-        let labels = load_label_config(Some(path)).await.unwrap();
+        let labels = load_label_config(Some(path)).unwrap();
         assert_eq!(labels.len(), 1);
         assert_eq!(labels[0].name, "bug");
     }
 
-    #[tokio::test]
-    async fn test_load_label_config_yaml() {
+    #[test]
+    fn test_load_label_config_yaml() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.yaml");
         std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
-        let labels = load_label_config(Some(path)).await.unwrap();
+        let labels = load_label_config(Some(path)).unwrap();
         assert_eq!(labels.len(), 1);
         assert_eq!(labels[0].name, "bug");
     }
 
-    #[tokio::test]
-    async fn test_load_label_config_yml() {
+    #[test]
+    fn test_load_label_config_yml() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.yml");
         std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
-        let labels = load_label_config(Some(path)).await.unwrap();
+        let labels = load_label_config(Some(path)).unwrap();
         assert_eq!(labels.len(), 1);
         assert_eq!(labels[0].name, "bug");
     }
 
-    #[tokio::test]
-    async fn test_load_label_config_invalid_extension() {
+    #[test]
+    fn test_load_label_config_invalid_extension() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.toml");
         std::fs::write(&path, "").unwrap();
-        let result = load_label_config(Some(path)).await;
+        let result = load_label_config(Some(path));
         assert!(result.is_err());
     }
 
-    #[tokio::test]
-    async fn test_load_label_config_file_not_found() {
+    #[test]
+    fn test_load_label_config_file_not_found() {
         let path = PathBuf::from("/nonexistent/labels.json");
-        let result = load_label_config(Some(path)).await;
+        let result = load_label_config(Some(path));
         assert!(result.is_err());
     }
 
+    // CWD-dependent tests must run in a single test to avoid race conditions
+    // (set_current_dir is process-global). Same pattern as test_get_access_token_env_variants.
     #[tokio::test]
-    async fn test_load_label_config_none_returns_defaults() {
-        let labels = load_label_config(None).await.unwrap();
-        assert_eq!(labels, default_labels());
+    async fn test_cwd_dependent_operations() {
+        let original_dir = std::env::current_dir().unwrap();
+
+        // --- load_label_config: no convention file → error ---
+        {
+            let dir = tempfile::tempdir().unwrap();
+            std::env::set_current_dir(dir.path()).unwrap();
+
+            let result = load_label_config(None);
+            assert!(result.is_err());
+            let err_msg = result.unwrap_err().to_string();
+            assert!(err_msg.contains("No configuration file found"));
+        }
+
+        // --- load_label_config: convention file found ---
+        {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(
+                dir.path().join(".gh-labeler.json"),
+                r##"[{"name":"bug","color":"#ff0000"}]"##,
+            )
+            .unwrap();
+            std::env::set_current_dir(dir.path()).unwrap();
+
+            let labels = load_label_config(None).unwrap();
+            assert_eq!(labels.len(), 1);
+            assert_eq!(labels[0].name, "bug");
+        }
+
+        // --- run_init: default output (json) ---
+        {
+            let dir = tempfile::tempdir().unwrap();
+            std::env::set_current_dir(dir.path()).unwrap();
+
+            run_init("json".to_string(), None).await.unwrap();
+            let expected = dir.path().join(".gh-labeler.json");
+            assert!(expected.exists());
+        }
+
+        // --- run_init: default output (yaml) ---
+        {
+            let dir = tempfile::tempdir().unwrap();
+            std::env::set_current_dir(dir.path()).unwrap();
+
+            run_init("yaml".to_string(), None).await.unwrap();
+            let expected = dir.path().join(".gh-labeler.yaml");
+            assert!(expected.exists());
+        }
+
+        // --- run_init: existing file → error ---
+        {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::write(dir.path().join(".gh-labeler.json"), "[]").unwrap();
+            std::env::set_current_dir(dir.path()).unwrap();
+
+            let result = run_init("json".to_string(), None).await;
+            assert!(result.is_err());
+            let err_msg = result.unwrap_err().to_string();
+            assert!(err_msg.contains("File already exists"));
+        }
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_run_init_explicit_output_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("custom.json");
+        run_init("json".to_string(), Some(output.clone()))
+            .await
+            .unwrap();
+        assert!(output.exists());
     }
 
     // --- display_sync_result tests ---
