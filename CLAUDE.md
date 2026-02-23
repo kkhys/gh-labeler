@@ -86,3 +86,40 @@ Versions must stay synchronized: Changesets manages `package.json`, then `sync-v
 - TypeScript: Biome with recommended rules, space indentation
 - TOML: taplo with `align_entries` and `reorder_keys`
 - Code comments in English
+
+## Common Pitfalls
+
+- **Color format mismatch**: Config uses `#rrggbb`, API uses `rrggbb` — strip/add `#` at the boundary
+- **Non-atomic update**: `update_label()` does delete + recreate; if create fails after delete, the label is lost
+- **Alias vs similarity order**: Alias matching must be checked before Levenshtein similarity — never reverse this
+- **SyncOperation additions**: Adding a new variant requires updating 5 locations (enum, plan, execute, SyncResult::add_operation, display_sync_result)
+
+## Test Strategy
+
+### Mock Infrastructure
+
+- `MockLabelService` — configurable success responses for happy-path tests
+- `FailingLabelService` — returns errors for error-path tests
+
+### Test Helpers
+
+- `test_config()` — creates a minimal `SyncConfig` for testing
+- `test_syncer()` — creates a `LabelSyncer` with mock service
+- `make_github_label(name, color, description)` — creates a `GitHubLabel` instance
+- `make_label_config(name, color, description)` — creates a `LabelConfig` instance
+
+### Test Categories
+
+- **Unit tests**: individual function behavior (color validation, similarity calculation)
+- **Planning tests**: `plan_sync_operations()` output without side effects
+- **Integration tests**: full `sync_labels()` flow with mock services
+- **Error path tests**: failure handling with `FailingLabelService`
+- **CLI helper tests**: argument parsing and config construction
+
+## Key ADRs
+
+1. **delete + recreate for updates** — octocrab lacks a direct PATCH endpoint for labels
+2. **Similarity threshold 0.7** — balances rename detection accuracy vs false positives
+3. **Plan/execute separation** — enables dry-run mode without code duplication
+4. **Trait-based DI** — `LabelService` trait allows mock injection for testing
+5. **Dual distribution (crates.io + npm)** — Rust binary with npm wrapper for broader accessibility
