@@ -357,6 +357,20 @@ mod tests {
     }
 
     #[test]
+    fn test_sync_config_parse_repository() {
+        let config = SyncConfig {
+            access_token: "token".to_string(),
+            repository: "owner/repo".to_string(),
+            dry_run: false,
+            allow_added_labels: false,
+            labels: None,
+        };
+        let (owner, repo) = config.parse_repository().unwrap();
+        assert_eq!(owner, "owner");
+        assert_eq!(repo, "repo");
+    }
+
+    #[test]
     fn test_load_valid_json() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.json");
