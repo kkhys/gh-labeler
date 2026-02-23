@@ -26,11 +26,7 @@ pub fn calculate_label_similarity(a: &str, b: &str) -> f64 {
     let distance = levenshtein_distance(&a, &b);
     let max_len = a.len().max(b.len()) as f64;
 
-    if max_len == 0.0 {
-        1.0
-    } else {
-        1.0 - (distance as f64 / max_len)
-    }
+    1.0 - (distance as f64 / max_len)
 }
 
 /// Calculate Levenshtein distance
