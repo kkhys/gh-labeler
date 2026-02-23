@@ -9,8 +9,10 @@ use std::path::PathBuf;
 use gh_labeler::{
     config::{
         default_labels, fetch_remote_config, fetch_remote_convention_config,
-        find_convention_config, load_labels_from_file, parse_repository, CONVENTION_CONFIG_FILES,
+        find_convention_config, load_labels_from_file, load_labels_from_stdin, parse_repository,
+        CONVENTION_CONFIG_FILES,
     },
+    exit_codes,
     sync::LabelSyncer,
     Error, LabelConfig, LabelService, Result, SyncConfig,
 };
@@ -61,6 +63,10 @@ struct Cli {
     /// Verbose output
     #[arg(short, long)]
     verbose: bool,
+
+    /// Output results as JSON (for sync/preview commands)
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand)]
@@ -91,15 +97,47 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
+    let code = match run_cli().await {
+        Ok(code) => code,
+        Err(e) => {
+            let cli = Cli::try_parse();
+            let json_mode = cli.map(|c| c.json).unwrap_or(false);
+            let code = e.exit_code();
+            if json_mode {
+                let output = serde_json::json!({
+                    "status": "error",
+                    "exit_code": code,
+                    "errors": [e.to_string()],
+                });
+                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            } else {
+                eprintln!("{} {}", "Error:".red(), e);
+            }
+            code
+        }
+    };
+
+    std::process::exit(code);
+}
+
+/// Main CLI entry point returning an exit code
+async fn run_cli() -> Result<i32> {
     let cli = Cli::parse();
+    let json_mode = cli.json;
 
     match cli.command {
         Some(Commands::Sync) => {
             let token = get_access_token(cli.access_token)?;
             let repository = require_repository(cli.repository)?;
-            let labels =
-                load_label_config(cli.config, cli.template, cli.remote_config, &token).await?;
+            let labels = load_label_config(
+                cli.config,
+                cli.template,
+                cli.remote_config,
+                &token,
+                json_mode,
+            )
+            .await?;
 
             let sync_config = SyncConfig {
                 access_token: token,
@@ -109,14 +147,20 @@ async fn main() -> Result<()> {
                 labels: Some(labels),
             };
 
-            run_sync(sync_config, cli.verbose).await
+            run_sync(sync_config, cli.verbose, json_mode).await
         }
 
         Some(Commands::Preview) => {
             let token = get_access_token(cli.access_token)?;
             let repository = require_repository(cli.repository)?;
-            let labels =
-                load_label_config(cli.config, cli.template, cli.remote_config, &token).await?;
+            let labels = load_label_config(
+                cli.config,
+                cli.template,
+                cli.remote_config,
+                &token,
+                json_mode,
+            )
+            .await?;
 
             let sync_config = SyncConfig {
                 access_token: token,
@@ -126,15 +170,19 @@ async fn main() -> Result<()> {
                 labels: Some(labels),
             };
 
-            run_sync(sync_config, cli.verbose).await
+            run_sync(sync_config, cli.verbose, json_mode).await
         }
 
-        Some(Commands::Init { format, output }) => run_init(format, output).await,
+        Some(Commands::Init { format, output }) => {
+            run_init(format, output).await?;
+            Ok(exit_codes::SUCCESS)
+        }
 
         Some(Commands::List { format }) => {
             let token = get_access_token(cli.access_token)?;
             let repository = require_repository(cli.repository)?;
-            run_list(token, repository, format).await
+            run_list(token, repository, format).await?;
+            Ok(exit_codes::SUCCESS)
         }
 
         None => {
@@ -142,8 +190,14 @@ async fn main() -> Result<()> {
             if let (Some(token), Some(repo)) =
                 (get_access_token(cli.access_token).ok(), cli.repository)
             {
-                let labels =
-                    load_label_config(cli.config, cli.template, cli.remote_config, &token).await?;
+                let labels = load_label_config(
+                    cli.config,
+                    cli.template,
+                    cli.remote_config,
+                    &token,
+                    json_mode,
+                )
+                .await?;
 
                 let sync_config = SyncConfig {
                     access_token: token,
@@ -153,22 +207,31 @@ async fn main() -> Result<()> {
                     labels: Some(labels),
                 };
 
-                run_sync(sync_config, cli.verbose).await
+                run_sync(sync_config, cli.verbose, json_mode).await
             } else {
-                eprintln!(
-                    "{}",
-                    "Error: Access token and repository are required".red()
-                );
-                eprintln!("Use {} for help", "gh-labeler --help".cyan());
-                std::process::exit(1);
+                if json_mode {
+                    let output = serde_json::json!({
+                        "status": "error",
+                        "exit_code": exit_codes::CONFIG_ERROR,
+                        "errors": ["Access token and repository are required"],
+                    });
+                    println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                } else {
+                    eprintln!(
+                        "{}",
+                        "Error: Access token and repository are required".red()
+                    );
+                    eprintln!("Use {} for help", "gh-labeler --help".cyan());
+                }
+                Ok(exit_codes::CONFIG_ERROR)
             }
         }
     }
 }
 
-/// Execute synchronization
-async fn run_sync(config: SyncConfig, verbose: bool) -> Result<()> {
-    if verbose {
+/// Execute synchronization and return an exit code
+async fn run_sync(config: SyncConfig, verbose: bool, json_mode: bool) -> Result<i32> {
+    if !json_mode && verbose {
         println!(
             "{} Initializing sync for repository: {}",
             "•".blue(),
@@ -186,7 +249,14 @@ async fn run_sync(config: SyncConfig, verbose: bool) -> Result<()> {
     let syncer = LabelSyncer::new(config).await?;
     let result = syncer.sync_labels().await?;
 
-    // Display results
+    if json_mode {
+        let output = result.to_output();
+        let code = output.exit_code;
+        println!("{}", serde_json::to_string_pretty(&output)?);
+        return Ok(code);
+    }
+
+    // Human-readable output
     display_sync_result(&result, verbose);
 
     if !result.errors().is_empty() {
@@ -194,10 +264,10 @@ async fn run_sync(config: SyncConfig, verbose: bool) -> Result<()> {
         for error in result.errors() {
             eprintln!("  {}", error.red());
         }
-        std::process::exit(1);
+        return Ok(exit_codes::PARTIAL_SUCCESS);
     }
 
-    Ok(())
+    Ok(exit_codes::SUCCESS)
 }
 
 /// Execute init command
@@ -390,50 +460,59 @@ fn parse_remote_config_spec(spec: &str) -> Result<(String, String, String)> {
     Ok((owner, repo, path.to_string()))
 }
 
-/// Load label configuration from local file, remote file, or template repository
+/// Load label configuration from local file, remote file, stdin, or template repository
 ///
 /// Priority:
 /// 1. `--remote-config` — fetch a specific file from a remote repository
 /// 2. `--template` — auto-detect convention config from a template repository
-/// 3. `--config` — load from local file
-/// 4. None — search for a convention-based config in the current directory
+/// 3. `--config -` — read from stdin (auto-detect JSON/YAML)
+/// 4. `--config <path>` — load from local file
+/// 5. None — search for a convention-based config in the current directory
 async fn load_label_config(
     config_path: Option<PathBuf>,
     template: Option<String>,
     remote_config: Option<String>,
     token: &str,
+    json_mode: bool,
 ) -> Result<Vec<LabelConfig>> {
     if let Some(spec) = remote_config {
         let (owner, repo, path) = parse_remote_config_spec(&spec)?;
-        println!(
-            "{} Fetching remote config: {}",
-            "•".blue(),
-            format!("{owner}/{repo}:{path}").cyan()
-        );
+        if !json_mode {
+            println!(
+                "{} Fetching remote config: {}",
+                "•".blue(),
+                format!("{owner}/{repo}:{path}").cyan()
+            );
+        }
         return fetch_remote_config(token, &owner, &repo, &path).await;
     }
 
     if let Some(template_repo) = template {
         let (owner, repo) = parse_repository(&template_repo)?;
-        println!(
-            "{} Fetching template config from: {}",
-            "•".blue(),
-            format!("{owner}/{repo}").cyan()
-        );
+        if !json_mode {
+            println!(
+                "{} Fetching template config from: {}",
+                "•".blue(),
+                format!("{owner}/{repo}").cyan()
+            );
+        }
         return fetch_remote_convention_config(token, &owner, &repo).await;
     }
 
     match config_path {
+        Some(path) if path.as_os_str() == "-" => load_labels_from_stdin(),
         Some(path) => load_labels_from_file(&path),
         None => {
             let path = find_convention_config().ok_or_else(|| Error::ConfigFileNotFound {
                 searched_files: CONVENTION_CONFIG_FILES.join(", "),
             })?;
-            println!(
-                "{} Using config file: {}",
-                "•".blue(),
-                path.display().to_string().cyan()
-            );
+            if !json_mode {
+                println!(
+                    "{} Using config file: {}",
+                    "•".blue(),
+                    path.display().to_string().cyan()
+                );
+            }
             load_labels_from_file(&path)
         }
     }
@@ -499,7 +578,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.json");
         std::fs::write(&path, r##"[{"name":"bug","color":"#ff0000"}]"##).unwrap();
-        let labels = load_label_config(Some(path), None, None, "unused")
+        let labels = load_label_config(Some(path), None, None, "unused", false)
             .await
             .unwrap();
         assert_eq!(labels.len(), 1);
@@ -511,7 +590,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.yaml");
         std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
-        let labels = load_label_config(Some(path), None, None, "unused")
+        let labels = load_label_config(Some(path), None, None, "unused", false)
             .await
             .unwrap();
         assert_eq!(labels.len(), 1);
@@ -523,7 +602,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.yml");
         std::fs::write(&path, "- name: bug\n  color: \"#ff0000\"\n").unwrap();
-        let labels = load_label_config(Some(path), None, None, "unused")
+        let labels = load_label_config(Some(path), None, None, "unused", false)
             .await
             .unwrap();
         assert_eq!(labels.len(), 1);
@@ -535,14 +614,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("labels.toml");
         std::fs::write(&path, "").unwrap();
-        let result = load_label_config(Some(path), None, None, "unused").await;
+        let result = load_label_config(Some(path), None, None, "unused", false).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_load_label_config_file_not_found() {
         let path = PathBuf::from("/nonexistent/labels.json");
-        let result = load_label_config(Some(path), None, None, "unused").await;
+        let result = load_label_config(Some(path), None, None, "unused", false).await;
         assert!(result.is_err());
     }
 
@@ -597,7 +676,7 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             std::env::set_current_dir(dir.path()).unwrap();
 
-            let result = load_label_config(None, None, None, "unused").await;
+            let result = load_label_config(None, None, None, "unused", false).await;
             assert!(result.is_err());
             let err_msg = result.unwrap_err().to_string();
             assert!(err_msg.contains("No configuration file found"));
@@ -613,7 +692,9 @@ mod tests {
             .unwrap();
             std::env::set_current_dir(dir.path()).unwrap();
 
-            let labels = load_label_config(None, None, None, "unused").await.unwrap();
+            let labels = load_label_config(None, None, None, "unused", false)
+                .await
+                .unwrap();
             assert_eq!(labels.len(), 1);
             assert_eq!(labels[0].name, "bug");
         }
