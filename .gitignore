@@ -280,7 +280,7 @@ vite.config.ts.timestamp-*
 bin/gh-labeler*
 
 # TypeScript compilation output
-scripts/post-install.js
+scripts/*.js
 
 # Package manager lockfiles
 package-lock.json

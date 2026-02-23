@@ -14,6 +14,6 @@
     "moduleResolution": "node",
     "types": ["node"]
   },
-  "include": ["scripts/post-install.ts"],
-  "exclude": ["node_modules", "target", "scripts/post-install.js"]
+  "include": ["scripts/*.ts"],
+  "exclude": ["node_modules", "target", "scripts/*.js"]
 }
