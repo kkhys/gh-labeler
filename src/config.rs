@@ -407,6 +407,50 @@ pub async fn fetch_remote_convention_config(
     })
 }
 
+/// Load label configuration from stdin
+///
+/// Reads all content from stdin and auto-detects the format (JSON or YAML).
+///
+/// # Errors
+/// If stdin is empty, or parsing/validation fails
+pub fn load_labels_from_stdin() -> Result<Vec<LabelConfig>> {
+    use std::io::Read;
+
+    let mut content = String::new();
+    std::io::stdin()
+        .read_to_string(&mut content)
+        .map_err(Error::Io)?;
+
+    if content.trim().is_empty() {
+        return Err(Error::config_validation("Empty input from stdin"));
+    }
+
+    parse_labels_auto_detect(&content)
+}
+
+/// Parse label configuration from a string, auto-detecting JSON or YAML format
+///
+/// Tries JSON first, then YAML.
+///
+/// # Errors
+/// If neither JSON nor YAML parsing succeeds, or validation fails
+fn parse_labels_auto_detect(content: &str) -> Result<Vec<LabelConfig>> {
+    // Try JSON first
+    if let Ok(labels) = serde_json::from_str::<Vec<LabelConfig>>(content) {
+        for label in &labels {
+            label.validate()?;
+        }
+        return Ok(labels);
+    }
+
+    // Fall back to YAML
+    let labels: Vec<LabelConfig> = serde_yaml::from_str(content)?;
+    for label in &labels {
+        label.validate()?;
+    }
+    Ok(labels)
+}
+
 /// Validate hex color code
 ///
 /// # Arguments
@@ -729,5 +773,43 @@ mod tests {
         assert_eq!(labels.len(), 2);
         assert_eq!(labels[0].name, "bug");
         assert_eq!(labels[1].name, "feature");
+    }
+
+    // --- parse_labels_auto_detect tests ---
+
+    #[test]
+    fn test_auto_detect_json() {
+        let content = r##"[{"name":"bug","color":"#ff0000"}]"##;
+        let labels = parse_labels_auto_detect(content).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_auto_detect_yaml() {
+        let content = "- name: bug\n  color: \"#ff0000\"\n";
+        let labels = parse_labels_auto_detect(content).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_auto_detect_invalid_content() {
+        let result = parse_labels_auto_detect("not valid json or yaml }{][");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auto_detect_json_with_invalid_color() {
+        let content = r##"[{"name":"bug","color":"invalid"}]"##;
+        let result = parse_labels_auto_detect(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auto_detect_yaml_with_invalid_color() {
+        let content = "- name: bug\n  color: invalid\n";
+        let result = parse_labels_auto_detect(content);
+        assert!(result.is_err());
     }
 }
