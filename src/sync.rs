@@ -4,13 +4,16 @@
 
 use std::collections::{HashMap, HashSet};
 
+use serde::Serialize;
+
 use crate::config::{LabelConfig, SyncConfig};
-use crate::error::{Error, Result};
+use crate::error::{exit_codes, Error, Result};
 use crate::github::{GitHubClient, GitHubLabel, LabelService};
 use crate::similarity::{calculate_label_similarity, SIMILARITY_THRESHOLD};
 
 /// Types of label synchronization operations
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum SyncOperation {
     /// Create a label
     Create { label: LabelConfig },
@@ -130,6 +133,76 @@ impl SyncResult {
     pub fn errors(&self) -> &[String] {
         &self.errors
     }
+
+    /// Convert to structured output for JSON serialization
+    pub fn to_output(&self) -> SyncOutput {
+        let has_changes = self.has_changes();
+        let has_errors = !self.errors.is_empty();
+
+        let status = if has_errors {
+            SyncStatus::Error
+        } else if has_changes {
+            SyncStatus::Success
+        } else {
+            SyncStatus::NoChanges
+        };
+
+        let exit_code = if has_errors {
+            exit_codes::PARTIAL_SUCCESS
+        } else {
+            exit_codes::SUCCESS
+        };
+
+        SyncOutput {
+            status,
+            dry_run: self.dry_run,
+            exit_code,
+            summary: SyncSummary {
+                created: self.created,
+                updated: self.updated,
+                deleted: self.deleted,
+                renamed: self.renamed,
+                unchanged: self.unchanged,
+            },
+            operations: self.operations.clone(),
+            errors: self.errors.clone(),
+            idempotent: !has_changes && !has_errors,
+        }
+    }
+}
+
+/// Structured output envelope for JSON mode
+#[derive(Debug, Serialize)]
+pub struct SyncOutput {
+    pub status: SyncStatus,
+    pub dry_run: bool,
+    pub exit_code: i32,
+    pub summary: SyncSummary,
+    pub operations: Vec<SyncOperation>,
+    pub errors: Vec<String>,
+    pub idempotent: bool,
+}
+
+/// High-level sync outcome
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncStatus {
+    /// Changes were executed successfully
+    Success,
+    /// No changes were required (idempotent state)
+    NoChanges,
+    /// One or more operations encountered errors
+    Error,
+}
+
+/// Numeric summary of sync operations
+#[derive(Debug, Serialize, PartialEq)]
+pub struct SyncSummary {
+    pub created: u32,
+    pub updated: u32,
+    pub deleted: u32,
+    pub renamed: u32,
+    pub unchanged: u32,
 }
 
 /// Label Synchronization Engine
@@ -961,5 +1034,139 @@ mod tests {
         let final_labels = syncer.client.get_labels();
         assert_eq!(final_labels.len(), 1);
         assert_eq!(final_labels[0].name, "bug");
+    }
+
+    // --- SyncOutput / to_output tests ---
+
+    #[test]
+    fn test_to_output_success_with_changes() {
+        let mut result = SyncResult::new(false);
+        result.add_operation(SyncOperation::Create {
+            label: make_label_config("bug", "#ff0000", None),
+        });
+        result.add_operation(SyncOperation::NoChange {
+            name: "feature".to_string(),
+        });
+
+        let output = result.to_output();
+        assert_eq!(output.status, SyncStatus::Success);
+        assert!(!output.dry_run);
+        assert_eq!(output.exit_code, exit_codes::SUCCESS);
+        assert_eq!(output.summary.created, 1);
+        assert_eq!(output.summary.unchanged, 1);
+        assert!(output.errors.is_empty());
+        assert!(!output.idempotent);
+    }
+
+    #[test]
+    fn test_to_output_no_changes_is_idempotent() {
+        let mut result = SyncResult::new(false);
+        result.add_operation(SyncOperation::NoChange {
+            name: "bug".to_string(),
+        });
+
+        let output = result.to_output();
+        assert_eq!(output.status, SyncStatus::NoChanges);
+        assert_eq!(output.exit_code, exit_codes::SUCCESS);
+        assert!(output.idempotent);
+    }
+
+    #[test]
+    fn test_to_output_error_status() {
+        let mut result = SyncResult::new(false);
+        result.add_operation(SyncOperation::Create {
+            label: make_label_config("bug", "#ff0000", None),
+        });
+        result.add_error("create failed".to_string());
+
+        let output = result.to_output();
+        assert_eq!(output.status, SyncStatus::Error);
+        assert_eq!(output.exit_code, exit_codes::PARTIAL_SUCCESS);
+        assert!(!output.idempotent);
+        assert_eq!(output.errors.len(), 1);
+    }
+
+    #[test]
+    fn test_to_output_dry_run_flag() {
+        let result = SyncResult::new(true);
+        let output = result.to_output();
+        assert!(output.dry_run);
+    }
+
+    #[test]
+    fn test_to_output_json_serialization() {
+        let mut result = SyncResult::new(false);
+        result.add_operation(SyncOperation::Create {
+            label: make_label_config("bug", "#ff0000", Some("A bug")),
+        });
+        result.add_operation(SyncOperation::Rename {
+            current_name: "defect".to_string(),
+            new_name: "issue".to_string(),
+            new_label: make_label_config("issue", "#00ff00", None),
+        });
+        result.add_operation(SyncOperation::Delete {
+            name: "old".to_string(),
+            reason: "Not in config".to_string(),
+        });
+
+        let output = result.to_output();
+        let json = serde_json::to_string_pretty(&output).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed["status"], "success");
+        assert_eq!(parsed["summary"]["created"], 1);
+        assert_eq!(parsed["summary"]["renamed"], 1);
+        assert_eq!(parsed["summary"]["deleted"], 1);
+        assert_eq!(parsed["operations"].as_array().unwrap().len(), 3);
+        assert_eq!(parsed["operations"][0]["type"], "create");
+        assert_eq!(parsed["operations"][1]["type"], "rename");
+        assert_eq!(parsed["operations"][2]["type"], "delete");
+    }
+
+    #[test]
+    fn test_sync_operation_serialization_variants() {
+        // Create
+        let op = SyncOperation::Create {
+            label: make_label_config("bug", "#ff0000", None),
+        };
+        let json: serde_json::Value = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["type"], "create");
+        assert_eq!(json["label"]["name"], "bug");
+
+        // Update
+        let op = SyncOperation::Update {
+            current_name: "old".to_string(),
+            new_label: make_label_config("old", "#00ff00", None),
+            changes: vec!["color".to_string()],
+        };
+        let json: serde_json::Value = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["type"], "update");
+        assert_eq!(json["current_name"], "old");
+
+        // Delete
+        let op = SyncOperation::Delete {
+            name: "x".to_string(),
+            reason: "gone".to_string(),
+        };
+        let json: serde_json::Value = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["type"], "delete");
+
+        // Rename
+        let op = SyncOperation::Rename {
+            current_name: "a".to_string(),
+            new_name: "b".to_string(),
+            new_label: make_label_config("b", "#0000ff", None),
+        };
+        let json: serde_json::Value = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["type"], "rename");
+        assert_eq!(json["current_name"], "a");
+        assert_eq!(json["new_name"], "b");
+
+        // NoChange
+        let op = SyncOperation::NoChange {
+            name: "ok".to_string(),
+        };
+        let json: serde_json::Value = serde_json::to_value(&op).unwrap();
+        assert_eq!(json["type"], "no_change");
     }
 }
