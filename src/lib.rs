@@ -14,7 +14,7 @@ pub mod github;
 pub mod similarity;
 pub mod sync;
 
-pub use config::{LabelConfig, SyncConfig};
+pub use config::{find_convention_config, load_labels_from_file, LabelConfig, SyncConfig};
 pub use error::{Error, Result};
 pub use github::{GitHubClient, LabelService};
 pub use sync::LabelSyncer;
@@ -26,7 +26,7 @@ pub use sync::LabelSyncer;
 /// # Examples
 ///
 /// ```rust,no_run
-/// use gh_labeler::{SyncConfig, LabelSyncer};
+/// use gh_labeler::{SyncConfig, LabelConfig, LabelSyncer};
 ///
 /// #[tokio::main]
 /// async fn main() -> gh_labeler::Result<()> {
@@ -35,7 +35,13 @@ pub use sync::LabelSyncer;
 ///         repository: "owner/repo".to_string(),
 ///         dry_run: false,
 ///         allow_added_labels: true,
-///         labels: None,
+///         labels: Some(vec![LabelConfig {
+///             name: "bug".to_string(),
+///             color: "#d73a4a".to_string(),
+///             description: Some("Something isn't working".to_string()),
+///             aliases: vec![],
+///             delete: false,
+///         }]),
 ///     };
 ///
 ///     let syncer = LabelSyncer::new(config).await?;
