@@ -38,6 +38,9 @@ pub enum Error {
 
     #[error("Invalid label color: {0} (expected 6-digit hex without #)")]
     InvalidLabelColor(String),
+
+    #[error("No configuration file found. Searched for: {searched_files}. Run `gh-labeler init` to create one.")]
+    ConfigFileNotFound { searched_files: String },
 }
 
 impl Error {
