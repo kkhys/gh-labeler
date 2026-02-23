@@ -491,6 +491,43 @@ mod tests {
         }
     }
 
+    struct FailingLabelService {
+        labels: Vec<GitHubLabel>,
+    }
+
+    impl FailingLabelService {
+        fn new(labels: Vec<GitHubLabel>) -> Self {
+            Self { labels }
+        }
+    }
+
+    #[async_trait]
+    impl LabelService for FailingLabelService {
+        async fn get_all_labels(&self) -> Result<Vec<GitHubLabel>> {
+            Ok(self.labels.clone())
+        }
+
+        async fn create_label(&self, _label: &LabelConfig) -> Result<GitHubLabel> {
+            Err(Error::config_validation("Mock create error"))
+        }
+
+        async fn update_label(
+            &self,
+            _current_name: &str,
+            _label: &LabelConfig,
+        ) -> Result<GitHubLabel> {
+            Err(Error::config_validation("Mock update error"))
+        }
+
+        async fn delete_label(&self, _label_name: &str) -> Result<()> {
+            Err(Error::config_validation("Mock delete error"))
+        }
+
+        async fn repository_exists(&self) -> bool {
+            true
+        }
+    }
+
     fn test_config(labels: Vec<LabelConfig>) -> SyncConfig {
         SyncConfig {
             access_token: "test-token".to_string(),
@@ -890,6 +927,17 @@ mod tests {
         let final_labels = syncer.client.get_labels();
         assert_eq!(final_labels.len(), 1);
         assert_eq!(final_labels[0].name, "new-label");
+    }
+
+    #[tokio::test]
+    async fn test_sync_labels_with_operation_error() {
+        let service = FailingLabelService::new(vec![]);
+        let config = test_config(vec![make_label_config("bug", "#d73a4a", Some("Bug"))]);
+        let syncer = LabelSyncer::with_service(service, config).unwrap();
+        let result = syncer.sync_labels().await.unwrap();
+        // The create operation should fail, resulting in an error being recorded
+        assert!(!result.errors().is_empty());
+        assert!(result.errors()[0].contains("Operation failed"));
     }
 
     #[tokio::test]
