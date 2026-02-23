@@ -41,6 +41,33 @@ pub enum Error {
 
     #[error("No configuration file found. Searched for: {searched_files}. Run `gh-labeler init` to create one.")]
     ConfigFileNotFound { searched_files: String },
+
+    #[error("Remote config file not found in {repo}. Searched for: {searched_files}")]
+    RemoteConfigNotFound {
+        repo: String,
+        searched_files: String,
+    },
+}
+
+/// Exit code constants for CLI process termination
+pub mod exit_codes {
+    /// Successful execution
+    pub const SUCCESS: i32 = 0;
+
+    /// General / unclassified error
+    pub const GENERAL_ERROR: i32 = 1;
+
+    /// Configuration or validation error
+    pub const CONFIG_ERROR: i32 = 2;
+
+    /// Authentication failure (invalid or missing token)
+    pub const AUTH_ERROR: i32 = 3;
+
+    /// Target repository not found
+    pub const REPO_NOT_FOUND: i32 = 4;
+
+    /// Sync completed but some operations failed
+    pub const PARTIAL_SUCCESS: i32 = 5;
 }
 
 impl Error {
@@ -52,5 +79,106 @@ impl Error {
     /// Create a new label validation error
     pub fn label_validation<S: Into<String>>(message: S) -> Self {
         Error::LabelValidation(message.into())
+    }
+
+    /// Return the appropriate CLI exit code for this error
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Error::ConfigValidation(_)
+            | Error::LabelValidation(_)
+            | Error::InvalidRepositoryFormat(_)
+            | Error::InvalidLabelColor(_)
+            | Error::ConfigFileNotFound { .. }
+            | Error::RemoteConfigNotFound { .. }
+            | Error::Json(_)
+            | Error::Yaml(_) => exit_codes::CONFIG_ERROR,
+
+            Error::AuthenticationFailed => exit_codes::AUTH_ERROR,
+
+            Error::RepositoryNotFound(_) => exit_codes::REPO_NOT_FOUND,
+
+            Error::GitHubApi(_) | Error::Io(_) => exit_codes::GENERAL_ERROR,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exit_code_config_errors() {
+        assert_eq!(
+            Error::ConfigValidation("bad".into()).exit_code(),
+            exit_codes::CONFIG_ERROR
+        );
+        assert_eq!(
+            Error::LabelValidation("bad".into()).exit_code(),
+            exit_codes::CONFIG_ERROR
+        );
+        assert_eq!(
+            Error::InvalidRepositoryFormat("x".into()).exit_code(),
+            exit_codes::CONFIG_ERROR
+        );
+        assert_eq!(
+            Error::InvalidLabelColor("x".into()).exit_code(),
+            exit_codes::CONFIG_ERROR
+        );
+        assert_eq!(
+            Error::ConfigFileNotFound {
+                searched_files: "a".into()
+            }
+            .exit_code(),
+            exit_codes::CONFIG_ERROR
+        );
+        assert_eq!(
+            Error::RemoteConfigNotFound {
+                repo: "o/r".into(),
+                searched_files: "a".into()
+            }
+            .exit_code(),
+            exit_codes::CONFIG_ERROR
+        );
+    }
+
+    #[test]
+    fn test_exit_code_auth_error() {
+        assert_eq!(
+            Error::AuthenticationFailed.exit_code(),
+            exit_codes::AUTH_ERROR
+        );
+    }
+
+    #[test]
+    fn test_exit_code_repo_not_found() {
+        assert_eq!(
+            Error::RepositoryNotFound("o/r".into()).exit_code(),
+            exit_codes::REPO_NOT_FOUND
+        );
+    }
+
+    #[test]
+    fn test_exit_code_io_error() {
+        let io_err = std::io::Error::other("test");
+        assert_eq!(Error::Io(io_err).exit_code(), exit_codes::GENERAL_ERROR);
+    }
+
+    #[test]
+    fn test_exit_code_constants_are_distinct() {
+        let codes = [
+            exit_codes::SUCCESS,
+            exit_codes::GENERAL_ERROR,
+            exit_codes::CONFIG_ERROR,
+            exit_codes::AUTH_ERROR,
+            exit_codes::REPO_NOT_FOUND,
+            exit_codes::PARTIAL_SUCCESS,
+        ];
+        for (i, a) in codes.iter().enumerate() {
+            for (j, b) in codes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(a, b, "exit codes at index {i} and {j} must differ");
+                }
+            }
+        }
     }
 }

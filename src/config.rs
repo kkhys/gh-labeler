@@ -303,6 +303,154 @@ pub fn find_convention_config_in(dir: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Parse label configuration from a content string, detecting format by file path extension
+///
+/// # Arguments
+/// - `content`: Raw file content (JSON or YAML)
+/// - `path`: File path used to determine format by extension
+///
+/// # Errors
+/// If parsing or validation fails, or if the extension is unsupported
+pub fn parse_labels_from_content(content: &str, path: &str) -> Result<Vec<LabelConfig>> {
+    let ext = path.rsplit('.').next().unwrap_or("");
+
+    let labels: Vec<LabelConfig> = match ext {
+        "json" => serde_json::from_str(content)?,
+        "yaml" | "yml" => serde_yaml::from_str(content)?,
+        _ => {
+            return Err(Error::config_validation(format!(
+                "Unsupported file extension for remote config: {path}"
+            )));
+        }
+    };
+
+    for label in &labels {
+        label.validate()?;
+    }
+
+    Ok(labels)
+}
+
+/// Check if an octocrab error is a 404 Not Found
+fn is_not_found_error(err: &octocrab::Error) -> bool {
+    err.to_string().contains("Not Found")
+}
+
+/// Fetch a label configuration file from a remote GitHub repository
+///
+/// # Arguments
+/// - `token`: GitHub personal access token
+/// - `owner`: Repository owner
+/// - `repo`: Repository name
+/// - `path`: File path within the repository
+///
+/// # Errors
+/// If the API call fails or the content cannot be parsed
+pub async fn fetch_remote_config(
+    token: &str,
+    owner: &str,
+    repo: &str,
+    path: &str,
+) -> Result<Vec<LabelConfig>> {
+    let octocrab = octocrab::Octocrab::builder()
+        .personal_token(token.to_string())
+        .build()
+        .map_err(Error::GitHubApi)?;
+
+    let content_items = octocrab
+        .repos(owner, repo)
+        .get_content()
+        .path(path)
+        .send()
+        .await
+        .map_err(Error::GitHubApi)?;
+
+    let file = content_items
+        .items
+        .first()
+        .ok_or_else(|| Error::config_validation("Remote file returned empty content"))?;
+
+    let decoded = file
+        .decoded_content()
+        .ok_or_else(|| Error::config_validation("Failed to decode remote file content"))?;
+
+    parse_labels_from_content(&decoded, path)
+}
+
+/// Fetch a convention-based config file from a remote GitHub repository
+///
+/// Searches [`CONVENTION_CONFIG_FILES`] in order and returns the first match.
+///
+/// # Arguments
+/// - `token`: GitHub personal access token
+/// - `owner`: Repository owner
+/// - `repo`: Repository name
+///
+/// # Errors
+/// Returns `RemoteConfigNotFound` if none of the convention files exist
+pub async fn fetch_remote_convention_config(
+    token: &str,
+    owner: &str,
+    repo: &str,
+) -> Result<Vec<LabelConfig>> {
+    for path in CONVENTION_CONFIG_FILES {
+        match fetch_remote_config(token, owner, repo, path).await {
+            Ok(labels) => return Ok(labels),
+            Err(Error::GitHubApi(ref e)) if is_not_found_error(e) => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err(Error::RemoteConfigNotFound {
+        repo: format!("{owner}/{repo}"),
+        searched_files: CONVENTION_CONFIG_FILES.join(", "),
+    })
+}
+
+/// Load label configuration from stdin
+///
+/// Reads all content from stdin and auto-detects the format (JSON or YAML).
+///
+/// # Errors
+/// If stdin is empty, or parsing/validation fails
+pub fn load_labels_from_stdin() -> Result<Vec<LabelConfig>> {
+    use std::io::Read;
+
+    let mut content = String::new();
+    std::io::stdin()
+        .read_to_string(&mut content)
+        .map_err(Error::Io)?;
+
+    if content.trim().is_empty() {
+        return Err(Error::config_validation("Empty input from stdin"));
+    }
+
+    parse_labels_auto_detect(&content)
+}
+
+/// Parse label configuration from a string, auto-detecting JSON or YAML format
+///
+/// Tries JSON first, then YAML.
+///
+/// # Errors
+/// If neither JSON nor YAML parsing succeeds, or validation fails
+fn parse_labels_auto_detect(content: &str) -> Result<Vec<LabelConfig>> {
+    // Try JSON first
+    if let Ok(labels) = serde_json::from_str::<Vec<LabelConfig>>(content) {
+        for label in &labels {
+            label.validate()?;
+        }
+        return Ok(labels);
+    }
+
+    // Fall back to YAML
+    let labels: Vec<LabelConfig> = serde_yaml::from_str(content)?;
+    for label in &labels {
+        label.validate()?;
+    }
+    Ok(labels)
+}
+
 /// Validate hex color code
 ///
 /// # Arguments
@@ -558,5 +706,110 @@ mod tests {
     fn test_load_labels_from_file_not_found() {
         let path = PathBuf::from("/nonexistent/labels.json");
         assert!(load_labels_from_file(&path).is_err());
+    }
+
+    // --- parse_labels_from_content tests ---
+
+    #[test]
+    fn test_parse_labels_from_content_json() {
+        let content = r##"[{"name":"bug","color":"#ff0000","description":"A bug"}]"##;
+        let labels = parse_labels_from_content(content, "labels.json").unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+        assert_eq!(labels[0].color, "#ff0000");
+        assert_eq!(labels[0].description.as_deref(), Some("A bug"));
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_yaml() {
+        let content = "- name: bug\n  color: \"#ff0000\"\n";
+        let labels = parse_labels_from_content(content, "labels.yaml").unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_yml() {
+        let content = "- name: bug\n  color: \"#ff0000\"\n";
+        let labels = parse_labels_from_content(content, ".github/labels.yml").unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_invalid_json() {
+        let result = parse_labels_from_content("not json", "file.json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_invalid_color() {
+        let content = r##"[{"name":"bug","color":"invalid"}]"##;
+        let result = parse_labels_from_content(content, "file.json");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_unsupported_extension() {
+        let result = parse_labels_from_content("", "file.toml");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Unsupported file extension"));
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_no_extension() {
+        let result = parse_labels_from_content("", "Makefile");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_labels_from_content_multiple_labels() {
+        let content = r##"[
+            {"name":"bug","color":"#ff0000"},
+            {"name":"feature","color":"#00ff00","description":"New feature"}
+        ]"##;
+        let labels = parse_labels_from_content(content, "labels.json").unwrap();
+        assert_eq!(labels.len(), 2);
+        assert_eq!(labels[0].name, "bug");
+        assert_eq!(labels[1].name, "feature");
+    }
+
+    // --- parse_labels_auto_detect tests ---
+
+    #[test]
+    fn test_auto_detect_json() {
+        let content = r##"[{"name":"bug","color":"#ff0000"}]"##;
+        let labels = parse_labels_auto_detect(content).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_auto_detect_yaml() {
+        let content = "- name: bug\n  color: \"#ff0000\"\n";
+        let labels = parse_labels_auto_detect(content).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_auto_detect_invalid_content() {
+        let result = parse_labels_auto_detect("not valid json or yaml }{][");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auto_detect_json_with_invalid_color() {
+        let content = r##"[{"name":"bug","color":"invalid"}]"##;
+        let result = parse_labels_auto_detect(content);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auto_detect_yaml_with_invalid_color() {
+        let content = "- name: bug\n  color: invalid\n";
+        let result = parse_labels_auto_detect(content);
+        assert!(result.is_err());
     }
 }
