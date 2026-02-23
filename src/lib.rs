@@ -16,11 +16,11 @@ pub mod sync;
 
 pub use config::{
     fetch_remote_config, fetch_remote_convention_config, find_convention_config,
-    load_labels_from_file, LabelConfig, SyncConfig,
+    load_labels_from_file, load_labels_from_stdin, LabelConfig, SyncConfig,
 };
-pub use error::{Error, Result};
+pub use error::{exit_codes, Error, Result};
 pub use github::{GitHubClient, LabelService};
-pub use sync::LabelSyncer;
+pub use sync::{LabelSyncer, SyncOperation, SyncOutput, SyncResult, SyncStatus, SyncSummary};
 
 /// Main functionality of gh-labeler
 ///
