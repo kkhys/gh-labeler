@@ -16,6 +16,10 @@
 - Alias support — Map old label names to new ones seamlessly
 - Dry run — Preview every change before it touches your repo
 - JSON / YAML — Bring your own config format
+- Convention-based config — Auto-detects `.gh-labeler.json` or `.github/labels.yaml` without `-c`
+- Remote config — Pull label definitions from a template repository
+- JSON output — Machine-readable output for AI agents and scripts (`--json`)
+- stdin support — Pipe configuration from another command (`--config -`)
 - CLI & library — Use standalone or embed in your Rust project
 
 ## Installation
@@ -44,15 +48,17 @@ Download from [GitHub Releases](https://github.com/kkhys/gh-labeler/releases).
 ## Quick Start
 
 ```bash
-# 1. Generate a default config
-gh-labeler init --format json > labels.json
+# 1. Generate a default config (creates .gh-labeler.json)
+gh-labeler init
 
-# 2. Preview changes
-gh-labeler preview -t $GITHUB_TOKEN -r owner/repo -c labels.json
+# 2. Preview changes (convention config auto-detected)
+gh-labeler preview -t $GITHUB_TOKEN -r owner/repo
 
 # 3. Apply
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo -c labels.json
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo
 ```
+
+If a convention config file exists in the current directory, the `-c` flag is not needed.
 
 ## Usage
 
@@ -67,13 +73,17 @@ Commands:
   help      Show help information
 
 Options:
-  -t, --access-token <TOKEN>   GitHub access token
-  -r, --repository <REPO>      Repository (owner/repo format)
-  -c, --config <FILE>          Configuration file path
-      --dry-run                Preview mode (no changes applied)
-      --allow-added-labels     Keep labels not in configuration
-  -v, --verbose                Verbose output
-  -h, --help                   Show help information
+  -t, --access-token <TOKEN>       GitHub access token
+  -r, --repository <REPO>          Repository (owner/repo format)
+  -c, --config <FILE>              Configuration file path (use "-" for stdin)
+      --template <REPO>            Template repository (owner/repo) — auto-detect convention config
+      --remote-config <SPEC>       Remote config file (owner/repo:path/to/file.yaml)
+      --dry-run                    Preview mode (no changes applied)
+      --allow-added-labels         Keep labels not in configuration
+      --json                       Output results as JSON (for sync/preview)
+  -v, --verbose                    Verbose output
+  -h, --help                       Show help information
+  -V, --version                    Print version
 ```
 
 ### Environment Variables
@@ -86,6 +96,43 @@ gh-labeler sync -r owner/repo
 ---
 
 ## Configuration
+
+### Convention-Based Auto-Detection
+
+When no `-c`, `--template`, or `--remote-config` flag is provided, gh-labeler searches the current directory for config files in the following order:
+
+1. `.gh-labeler.json`
+2. `.gh-labeler.yaml`
+3. `.gh-labeler.yml`
+4. `.github/labels.json`
+5. `.github/labels.yaml`
+6. `.github/labels.yml`
+
+The first file found is used. If none exist, an error is returned suggesting `gh-labeler init`.
+
+### Remote Config
+
+Pull label definitions directly from a GitHub repository:
+
+```bash
+# Auto-detect convention config from a template repository
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --template org/label-templates
+
+# Fetch a specific file from a remote repository
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --remote-config org/label-templates:config/labels.yaml
+```
+
+The `--template` flag searches the remote repository for convention config files (same search order as local auto-detection). The `--remote-config` flag fetches a specific file path.
+
+Note: `--config`, `--template`, and `--remote-config` are mutually exclusive.
+
+### Config Loading Priority
+
+1. `--remote-config` — Fetch a specific file from a remote repository
+2. `--template` — Auto-detect convention config from a template repository
+3. `--config -` — Read from stdin (auto-detect JSON/YAML)
+4. `--config <path>` — Load from a local file
+5. Convention auto-detection in the current directory
 
 ### Schema
 
@@ -146,26 +193,74 @@ gh-labeler sync -r owner/repo
 ## Examples
 
 ```bash
-# Sync with a custom config
-gh-labeler sync \
-  --access-token ghp_xxxxxxxxxxxx \
-  --repository myorg/myproject \
-  --config my-labels.json
+# Convention config (auto-detected, no -c needed)
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo
+
+# Explicit config file
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo -c my-labels.json
+
+# Use a template repository's labels
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --template org/label-standards
+
+# Fetch a specific remote config file
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo \
+  --remote-config org/configs:.github/labels.yaml
+
+# Pipe config via stdin
+cat labels.json | gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --config -
+
+# Generate config and pipe directly
+gh-labeler init --format yaml | gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --config -
+
+# JSON output for scripting / AI agents
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --json
 
 # Verbose preview
-gh-labeler preview \
-  -t $GITHUB_TOKEN \
-  -r owner/repo \
-  -c labels.json \
-  --verbose
+gh-labeler preview -t $GITHUB_TOKEN -r owner/repo --verbose
 
 # Keep unlisted labels alive
-gh-labeler sync \
-  -t $GITHUB_TOKEN \
-  -r owner/repo \
-  -c labels.json \
-  --allow-added-labels
+gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --allow-added-labels
 ```
+
+### JSON Output
+
+With `--json`, sync and preview commands produce structured output:
+
+```json
+{
+  "status": "success",
+  "dry_run": false,
+  "exit_code": 0,
+  "summary": {
+    "created": 2,
+    "updated": 1,
+    "deleted": 0,
+    "renamed": 1,
+    "unchanged": 3
+  },
+  "operations": [
+    { "type": "create", "label": { "name": "bug", "color": "#d73a4a" } },
+    { "type": "rename", "current_name": "defect", "new_name": "bug" }
+  ],
+  "errors": [],
+  "idempotent": false
+}
+```
+
+The `status` field is one of `success`, `no_changes`, or `error`.
+
+---
+
+## Exit Codes
+
+| Code | Meaning                                   |
+|------|-------------------------------------------|
+| 0    | Success                                   |
+| 1    | General / unclassified error              |
+| 2    | Configuration or validation error         |
+| 3    | Authentication failure (invalid token)    |
+| 4    | Target repository not found               |
+| 5    | Partial success (some operations failed)  |
 
 ---
 
@@ -188,7 +283,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         dry_run: false,
         allow_added_labels: false,
         labels: Some(vec![
-            LabelConfig::new("bug".to_string(), "d73a4a".to_string())?,
+            LabelConfig::new("bug".to_string(), "#d73a4a".to_string())?,
         ]),
     };
 
@@ -197,11 +292,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "Created: {}, Updated: {}, Deleted: {}",
-        result.created, result.updated, result.deleted
+        result.created(), result.updated(), result.deleted()
     );
 
     Ok(())
 }
+```
+
+### Additional Public APIs
+
+The library also exposes utilities for loading and parsing label configs:
+
+```rust
+use gh_labeler::{
+    load_labels_from_reader,   // Read labels from any std::io::Read (stdin, files, buffers)
+    parse_labels_auto_detect,  // Parse a string, auto-detecting JSON or YAML
+    load_labels_from_file,     // Load from a local file (format by extension)
+    find_convention_config,    // Find a convention config file in the current directory
+    fetch_remote_config,       // Fetch a config file from a GitHub repository
+    exit_codes,                // Exit code constants (SUCCESS, CONFIG_ERROR, etc.)
+    SyncOutput,                // Structured output envelope for JSON mode
+    SyncStatus,                // High-level sync outcome (Success, NoChanges, Error)
+    SyncSummary,               // Numeric summary of sync operations
+};
 ```
 
 ---

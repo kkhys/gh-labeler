@@ -55,14 +55,15 @@ pnpm run release:dry-run       # Preview release (no publish)
 
 ### Core Flow
 
-`main.rs` (CLI via clap) → `SyncConfig` → `LabelSyncer::new()` (validates config, creates `GitHubClient`, checks repo existence) → `sync_labels()` → plan operations → execute operations → `SyncResult`
+`main.rs` (CLI via clap) → `load_label_config()` (priority chain: `--remote-config` → `--template` → `--config -` stdin → `--config <path>` → convention auto-detect) → `SyncConfig` → `LabelSyncer::new()` (validates config, creates `GitHubClient`, checks repo existence) → `sync_labels()` → plan operations → execute operations → `SyncResult` → output (human-readable or `--json` via `SyncResult::to_output()`)
 
 ### Module Responsibilities
 
-- **`config.rs`** — `LabelConfig` and `SyncConfig` structs, JSON/YAML loading, validation (color must have `#` prefix, stored as `#rrggbb`), default label set
-- **`github.rs`** — `GitHubClient` wrapping octocrab, all GitHub API calls (CRUD labels, rate limit), `GitHubLabel` struct, Levenshtein similarity calculation, URL path encoding for UTF-8 label names
-- **`sync.rs`** — `LabelSyncer` orchestrates sync: builds alias map, plans operations (create/update/delete/rename/no-change), executes them. `SyncResult` tracks statistics
-- **`error.rs`** — `Error` enum with `thiserror`, covers API/HTTP/JSON/YAML/IO/validation errors
+- **`config.rs`** — `LabelConfig` and `SyncConfig` structs, JSON/YAML loading, validation (color must have `#` prefix, stored as `#rrggbb`), default label set, convention-based config auto-detection (`CONVENTION_CONFIG_FILES`, `find_convention_config()`), remote config fetching (`fetch_remote_config()`, `fetch_remote_convention_config()`), stdin/reader loading (`load_labels_from_stdin()`, `load_labels_from_reader()`), format auto-detection (`parse_labels_auto_detect()`)
+- **`github.rs`** — `GitHubClient` wrapping octocrab, all GitHub API calls (CRUD labels, rate limit), `GitHubLabel` struct, URL path encoding for UTF-8 label names
+- **`similarity.rs`** — Levenshtein distance calculation, `SIMILARITY_THRESHOLD` constant (0.7), `calculate_label_similarity()`
+- **`sync.rs`** — `LabelSyncer` orchestrates sync: builds alias map, plans operations (create/update/delete/rename/no-change), executes them. `SyncResult` tracks statistics. `SyncOutput`, `SyncStatus`, `SyncSummary` for structured JSON output via `SyncResult::to_output()`
+- **`error.rs`** — `Error` enum with `thiserror`, covers API/HTTP/JSON/YAML/IO/validation errors, `ConfigFileNotFound` and `RemoteConfigNotFound` variants. `exit_codes` module defines process exit code constants. `Error::exit_code()` maps error types to exit codes
 
 ### Key Design Decisions
 
@@ -70,6 +71,11 @@ pnpm run release:dry-run       # Preview release (no publish)
 - **Sync planning is separated from execution**: `plan_sync_operations()` produces a `Vec<SyncOperation>`, then each operation is executed individually. Dry-run skips execution
 - **Similarity threshold 0.7**: `find_similar_label()` uses Levenshtein distance to rename instead of delete+create when labels are sufficiently similar
 - **Alias matching takes priority over similarity**: alias match is checked first, then similar label search, then create new
+- **Convention-based config auto-detection**: `CONVENTION_CONFIG_FILES` defines search order (`.gh-labeler.json` → `.gh-labeler.yaml` → `.gh-labeler.yml` → `.github/labels.json` → `.github/labels.yaml` → `.github/labels.yml`). First match wins
+- **Remote config via GitHub Contents API**: `fetch_remote_config()` uses octocrab's `get_content()` to fetch and decode files from any accessible repository. `fetch_remote_convention_config()` tries convention file names in order
+- **JSON output mode**: `SyncResult::to_output()` generates `SyncOutput` with status, summary, operations, and errors for machine consumption. Errors in JSON mode are also structured JSON
+- **Exit codes**: Systematic mapping from error types to exit codes (0=success, 1=general, 2=config, 3=auth, 4=repo not found, 5=partial success). `Error::exit_code()` provides the mapping
+- **Config loading priority**: `--remote-config`, `--template`, and `--config` are mutually exclusive (enforced by clap `conflicts_with_all`). When none is given, convention auto-detection runs
 
 ### Dual Distribution (Rust + npm)
 
@@ -115,6 +121,11 @@ Versions must stay synchronized: Changesets manages `package.json`, then `sync-v
 - **Integration tests**: full `sync_labels()` flow with mock services
 - **Error path tests**: failure handling with `FailingLabelService`
 - **CLI helper tests**: argument parsing and config construction
+- **Convention config tests**: `find_convention_config_in()` priority order, missing files
+- **Remote config tests**: `parse_labels_from_content()` format detection, validation
+- **JSON output tests**: `SyncResult::to_output()` status/summary/serialization
+- **Exit code tests**: `Error::exit_code()` mapping, constant distinctness
+- **Reader/stdin tests**: `load_labels_from_reader()` with JSON, YAML, empty, and invalid input
 
 ## Key ADRs
 
@@ -123,3 +134,6 @@ Versions must stay synchronized: Changesets manages `package.json`, then `sync-v
 3. **Plan/execute separation** — enables dry-run mode without code duplication
 4. **Trait-based DI** — `LabelService` trait allows mock injection for testing
 5. **Dual distribution (crates.io + npm)** — Rust binary with npm wrapper for broader accessibility
+6. **Convention-based config auto-detection** — zero-config experience for standard file layouts
+7. **Structured JSON output** — machine-readable output for AI agents, scripts, and CI pipelines
+8. **Exit code mapping** — systematic error categorization for programmatic error handling
