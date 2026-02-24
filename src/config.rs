@@ -414,12 +414,16 @@ pub async fn fetch_remote_convention_config(
 /// # Errors
 /// If stdin is empty, or parsing/validation fails
 pub fn load_labels_from_stdin() -> Result<Vec<LabelConfig>> {
-    use std::io::Read;
+    load_labels_from_reader(std::io::stdin())
+}
 
+/// Load label configuration from any reader, auto-detecting JSON or YAML format
+///
+/// # Errors
+/// If the reader is empty, or parsing/validation fails
+pub fn load_labels_from_reader<R: std::io::Read>(mut reader: R) -> Result<Vec<LabelConfig>> {
     let mut content = String::new();
-    std::io::stdin()
-        .read_to_string(&mut content)
-        .map_err(Error::Io)?;
+    reader.read_to_string(&mut content).map_err(Error::Io)?;
 
     if content.trim().is_empty() {
         return Err(Error::config_validation("Empty input from stdin"));
@@ -434,7 +438,7 @@ pub fn load_labels_from_stdin() -> Result<Vec<LabelConfig>> {
 ///
 /// # Errors
 /// If neither JSON nor YAML parsing succeeds, or validation fails
-fn parse_labels_auto_detect(content: &str) -> Result<Vec<LabelConfig>> {
+pub fn parse_labels_auto_detect(content: &str) -> Result<Vec<LabelConfig>> {
     // Try JSON first
     if let Ok(labels) = serde_json::from_str::<Vec<LabelConfig>>(content) {
         for label in &labels {
@@ -810,6 +814,47 @@ mod tests {
     fn test_auto_detect_yaml_with_invalid_color() {
         let content = "- name: bug\n  color: invalid\n";
         let result = parse_labels_auto_detect(content);
+        assert!(result.is_err());
+    }
+
+    // --- load_labels_from_reader tests ---
+
+    #[test]
+    fn test_load_labels_from_reader_json() {
+        let input = r##"[{"name":"bug","color":"#ff0000"}]"##.as_bytes();
+        let labels = load_labels_from_reader(input).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_load_labels_from_reader_yaml() {
+        let input = "- name: bug\n  color: \"#ff0000\"\n".as_bytes();
+        let labels = load_labels_from_reader(input).unwrap();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].name, "bug");
+    }
+
+    #[test]
+    fn test_load_labels_from_reader_empty() {
+        let input = "".as_bytes();
+        let result = load_labels_from_reader(input);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Empty input"));
+    }
+
+    #[test]
+    fn test_load_labels_from_reader_whitespace_only() {
+        let input = "   \n  \t  ".as_bytes();
+        let result = load_labels_from_reader(input);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_load_labels_from_reader_invalid() {
+        let input = "not valid content }{".as_bytes();
+        let result = load_labels_from_reader(input);
         assert!(result.is_err());
     }
 }
