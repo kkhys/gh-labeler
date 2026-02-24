@@ -16,7 +16,8 @@ pub mod sync;
 
 pub use config::{
     fetch_remote_config, fetch_remote_convention_config, find_convention_config,
-    load_labels_from_file, load_labels_from_stdin, LabelConfig, SyncConfig,
+    load_labels_from_file, load_labels_from_reader, load_labels_from_stdin,
+    parse_labels_auto_detect, LabelConfig, SyncConfig,
 };
 pub use error::{exit_codes, Error, Result};
 pub use github::{GitHubClient, LabelService};
