@@ -1,0 +1,8 @@
+[advisories]
+ignore = [
+    # Marvin Attack: potential key recovery through timing sidechannels in the `rsa` crate.
+    # This is a transitive dependency (octocrab -> jsonwebtoken -> rsa) used only for
+    # GitHub API JWT authentication internally. No patched version is available upstream.
+    # Tracking: https://rustsec.org/advisories/RUSTSEC-2023-0071
+    "RUSTSEC-2023-0071",
+]
