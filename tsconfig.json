@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
+    "module": "Node16",
     "outDir": "./scripts",
     "rootDir": "./scripts",
     "strict": true,
@@ -11,7 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": false,
     "sourceMap": false,
-    "moduleResolution": "node",
+    "moduleResolution": "Node16",
     "types": ["node"]
   },
   "include": ["scripts/*.ts"],
