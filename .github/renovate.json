@@ -11,5 +11,6 @@
   "dependencyDashboard": true,
   "assignees": ["kkhys"],
   "labels": ["type: bump-version"],
-  "assignAutomerge": true
+  "assignAutomerge": true,
+  "minimumReleaseAge": "3 days"
 }
