@@ -41,7 +41,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a # v6.0.4
         with:
-          version: 10.33.2
+          version: 10.33.4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
