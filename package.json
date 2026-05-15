@@ -65,7 +65,7 @@
     "@biomejs/biome": "2.4.13",
     "@changesets/cli": "2.31.0",
     "@changesets/get-github-info": "0.8.0",
-    "@types/node": "24.12.2",
+    "@types/node": "24.12.4",
     "dotenv": "17.4.2",
     "typescript": "6.0.3"
   },
