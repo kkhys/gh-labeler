@@ -1,76 +1,81 @@
 {
   "name": "gh-labeler",
   "version": "0.1.8",
-  "description": "A fast and reliable GitHub repository label management tool built with Rust",
-  "main": "index.js",
-  "bin": {
-    "gh-labeler": "./bin/gh-labeler"
-  },
+  "description": "Declarative GitHub label management for humans and AI agents",
   "keywords": [
+    "ai-agents",
+    "automation",
+    "cli",
     "github",
     "labels",
-    "sync",
-    "cli",
-    "rust",
-    "automation"
+    "sync"
   ],
-  "author": "Keisuke Hayashi <hi@kkhys.me>",
+  "homepage": "https://github.com/kkhys/gh-labeler#readme",
+  "bugs": {
+    "url": "https://github.com/kkhys/gh-labeler/issues"
+  },
   "license": "MIT",
+  "author": "Keisuke Hayashi <hi@kkhys.me>",
   "repository": {
     "type": "git",
     "url": "https://github.com/kkhys/gh-labeler.git"
   },
-  "bugs": {
-    "url": "https://github.com/kkhys/gh-labeler/issues"
+  "bin": {
+    "gh-labeler": "./dist/cli/index.js",
+    "ghl": "./dist/cli/index.js"
   },
-  "homepage": "https://github.com/kkhys/gh-labeler#readme",
   "files": [
-    "bin/gh-labeler",
-    "scripts/post-install.js",
+    "dist",
+    "schema",
+    "AGENTS.md",
     "README.md",
     "LICENSE.md"
   ],
-  "engines": {
-    "node": ">=12"
+  "type": "module",
+  "imports": {
+    "#*": {
+      "development": "./src/*",
+      "default": "./dist/*"
+    }
   },
-  "os": [
-    "darwin",
-    "linux",
-    "win32"
-  ],
-  "cpu": [
-    "x64",
-    "arm64"
-  ],
-  "preferGlobal": true,
+  "exports": {},
   "scripts": {
-    "preinstall": "npm run build",
-    "build": "cargo build --release",
-    "build:ts": "tsc",
-    "test": "cargo test",
-    "prepare": "npm run build:ts && cargo build --release && npm run copy-binary",
-    "copy-binary": "node scripts/copy-binary.js",
-    "postinstall": "test \"$CI\" = \"true\" || node scripts/post-install.js",
-    "lint": "biome check .",
-    "lint:fix": "biome check --write .",
-    "version": "pnpm run build:ts && changeset version && pnpm run sync-versions",
-    "sync-versions": "node scripts/sync-versions.js",
-    "release": "pnpm run build && pnpm run publish:npm && pnpm run publish:cargo",
-    "release:dry-run": "pnpm run build && pnpm run publish:dry-run",
-    "publish:npm": "pnpm publish",
-    "publish:cargo": "cargo publish",
-    "publish:dry-run": "echo 'Dry run: npm publish' && pnpm publish --dry-run && echo 'Dry run: cargo publish' && cargo publish --dry-run"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "prepare": "lefthook install",
+    "prepublishOnly": "pnpm run build",
+    "version": "changeset version",
+    "release": "pnpm run build && changeset publish",
+    "release:dry-run": "pnpm run build && pnpm publish --dry-run"
+  },
+  "dependencies": {
+    "@octokit/plugin-retry": "8.1.1",
+    "@octokit/plugin-throttling": "11.0.5",
+    "@octokit/rest": "22.0.1",
+    "commander": "14.0.3",
+    "picocolors": "1.1.1",
+    "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.7",
     "@changesets/cli": "2.31.0",
     "@changesets/get-github-info": "0.8.0",
     "@types/node": "24.13.3",
-    "dotenv": "17.4.2",
-    "typescript": "6.0.3"
+    "@vitest/coverage-v8": "4.1.10",
+    "lefthook": "2.1.10",
+    "oxfmt": "0.62.0",
+    "oxlint": "1.77.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
   },
-  "packageManager": "pnpm@11.20.0",
-  "volta": {
-    "node": "24.19.0"
-  }
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.20.0"
 }

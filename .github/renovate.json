@@ -4,7 +4,6 @@
     "config:recommended",
     ":prHourlyLimitNone",
     ":timezone(Asia/Tokyo)",
-    "customManagers:biomeVersions",
     "helpers:pinGitHubActionDigests"
   ],
   "schedule": ["after 1am and before 6am"],

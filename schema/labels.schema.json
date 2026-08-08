@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/kkhys/gh-labeler/main/schema/labels.schema.json",
+  "title": "gh-labeler label config",
+  "description": "Declarative GitHub label configuration for gh-labeler. Either a bare array of labels or an object with a `labels` array and options.",
+  "oneOf": [
+    { "$ref": "#/$defs/labelArray" },
+    {
+      "type": "object",
+      "properties": {
+        "$schema": { "type": "string" },
+        "labels": { "$ref": "#/$defs/labelArray" },
+        "prune": {
+          "type": "boolean",
+          "description": "Delete repository labels that are not declared in `labels`. Default: false.",
+          "default": false
+        }
+      },
+      "required": ["labels"],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "labelArray": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/label" }
+    },
+    "label": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Label name as shown on GitHub."
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "description": "6-digit hex color with '#' prefix, e.g. '#d73a4a'. 3-digit shorthand is not supported. Required unless `delete` is true."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Label description shown on GitHub. GitHub caps this at 100 characters."
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Old names for this label. An existing label matching an alias is renamed instead of deleted and recreated."
+        },
+        "delete": {
+          "type": "boolean",
+          "description": "When true, delete this label from the repository if it exists. Such an entry needs only `name`.",
+          "default": false
+        }
+      },
+      "required": ["name"],
+      "if": {
+        "properties": { "delete": { "const": true } },
+        "required": ["delete"]
+      },
+      "else": {
+        "required": ["color"]
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: oxlint
+      glob: "*.{ts,js,mjs,cjs}"
+      run: pnpm exec oxlint {staged_files}
+    - name: oxfmt
+      glob: "*.{ts,js,mjs,cjs}"
+      run: pnpm exec oxfmt {staged_files}
+      stage_fixed: true
+
+pre-push:
+  jobs:
+    - name: typecheck
+      run: pnpm run typecheck
+    - name: test
+      run: pnpm run test
