@@ -1,19 +1,26 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "Node16",
-    "outDir": "./scripts",
-    "rootDir": "./scripts",
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleDetection": "force",
+    "customConditions": ["development"],
     "strict": true,
-    "esModuleInterop": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "declaration": false,
-    "sourceMap": false,
-    "moduleResolution": "Node16",
-    "types": ["node"]
+    "types": ["node"],
+    "noEmit": true
   },
-  "include": ["scripts/*.ts"],
-  "exclude": ["node_modules", "target", "scripts/*.js"]
+  "include": ["src", "tests"]
 }

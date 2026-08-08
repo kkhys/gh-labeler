@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error"
+  },
+  "rules": {
+    "func-style": ["error", "declaration"],
+    "capitalized-comments": [
+      "error",
+      "always",
+      {
+        "ignoreConsecutiveComments": true
+      }
+    ],
+    "import/no-named-export": "off",
+    "import/prefer-default-export": "off",
+    "import/group-exports": "off",
+    "import/exports-last": "off",
+    "vitest/no-hooks": "off",
+    "vitest/require-hook": "off",
+    "import/no-nodejs-modules": "off",
+    "node/no-sync": "off",
+    "vitest/prefer-to-be-truthy": "off",
+    "vitest/prefer-to-be-falsy": "off",
+    "vitest/prefer-expect-assertions": "off",
+    "vitest/no-importing-vitest-globals": "off",
+    "sort-keys": "off",
+    "sort-imports": "off",
+    "no-magic-numbers": "off",
+    "no-ternary": "off",
+    "no-continue": "off",
+    "id-length": "off",
+    "init-declarations": "off",
+    "unicorn/no-null": "off",
+    "max-lines": "off",
+    "max-lines-per-function": "off",
+    "max-statements": "off",
+    "max-params": "off",
+    "max-classes-per-file": "off",
+    "unicorn/max-nested-calls": "off",
+    "import/max-dependencies": "off",
+    "import/consistent-type-specifier-style": ["error", "prefer-inline"],
+    "vitest/valid-title": [
+      "error",
+      {
+        "allowArguments": true
+      }
+    ]
+  },
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["dist"]
+}
