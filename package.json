@@ -1,6 +1,6 @@
 {
   "name": "gh-labeler",
-  "version": "0.1.8",
+  "version": "1.0.0",
   "description": "Declarative GitHub label management for humans and AI agents",
   "keywords": [
     "ai-agents",
