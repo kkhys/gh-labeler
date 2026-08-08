@@ -1,343 +1,221 @@
 # gh-labeler
 
-> A fast and reliable GitHub label management tool, built with Rust.
+> Declarative GitHub label management for humans and AI agents.
 
-[![Crates.io](https://img.shields.io/crates/v/gh-labeler?style=flat-square)](https://crates.io/crates/gh-labeler)
-[![Crates.io](https://img.shields.io/crates/d/gh-labeler?style=flat-square&label=crate%20downloads)](https://crates.io/crates/gh-labeler)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/gh-labeler?style=flat-square)](https://www.npmjs.com/package/gh-labeler)
 [![npm downloads](https://img.shields.io/npm/d18m/gh-labeler?style=flat-square&label=npm%20downloads)](https://www.npmjs.com/package/gh-labeler)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://opensource.org/licenses/MIT)
 
----
+Declare your labels once in a JSON/YAML file, then `plan` and `sync` them to any repository. gh-labeler figures out the minimal set of changes — creating, updating, and renaming instead of blindly deleting and recreating — and never deletes anything you didn't ask it to.
 
-## Features
+```console
+$ gh-labeler plan
+Plan for kkhys/example:
 
-- Smart sync — Renames similar labels instead of deleting them (Levenshtein-based)
-- Alias support — Map old label names to new ones seamlessly
-- Dry run — Preview every change before it touches your repo
-- JSON / YAML — Bring your own config format
-- Convention-based config — Auto-detects `.gh-labeler.json` or `.github/labels.yaml` without `-c`
-- Remote config — Pull label definitions from a template repository
-- JSON output — Machine-readable output for AI agents and scripts (`--json`)
-- stdin support — Pipe configuration from another command (`--config -`)
-- CLI & library — Use standalone or embed in your Rust project
+  + create  bug  #d73a4a  Something isn't working
+  ~ update  enhancement  (color #84b6eb → #a2eeef)
+  → rename  defect → bug  (matched by alias)
+
+Summary: 1 to create, 1 to update, 1 to rename, 8 unchanged
+```
+
+## Highlights
+
+- Plan / apply workflow — `plan` previews, `sync` applies. Both share the same pure planning engine, so what you see is exactly what happens
+- Zero-config — repository inferred from the `origin` remote (or `GITHUB_REPOSITORY` in Actions), token from `GITHUB_TOKEN` / `GH_TOKEN` / the `gh` CLI. Inside a clone, `gh-labeler sync` just works
+- Safe by default — labels are deleted only when flagged `delete: true` or when you opt into `--prune`; interactive syncs confirm deletions first
+- Smart renames — alias matching plus Levenshtein similarity turn would-be delete+create pairs into renames that preserve label history on issues and PRs
+- Built for AI agents — `--json` gives every state-reporting command a versioned, structured envelope; errors carry machine-readable codes and actionable hints; exit codes are systematic
+- Self-describing config — a published JSON Schema powers editor autocomplete in both JSON and YAML
 
 ## Installation
 
-### npm (recommended)
-
 ```bash
-npm install -g gh-labeler
-
-# or run directly
-npx gh-labeler --help
+npm install -g gh-labeler   # or: pnpm add -g gh-labeler / npx gh-labeler
 ```
 
-### Cargo
-
-```bash
-cargo install gh-labeler
-```
-
-### Binary
-
-Download from [GitHub Releases](https://github.com/kkhys/gh-labeler/releases).
-
----
+Requires Node.js >= 22. The install provides two commands: `gh-labeler` and its short alias `ghl`.
 
 ## Quick Start
 
 ```bash
-# 1. Generate a default config (creates .gh-labeler.json)
-gh-labeler init
+cd your-repo
 
-# 2. Preview changes (convention config auto-detected)
-gh-labeler preview -t $GITHUB_TOKEN -r owner/repo
-
-# 3. Apply
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo
+gh-labeler init      # 1. create .github/labels.yml with a starter set
+gh-labeler plan      # 2. preview what would change
+gh-labeler sync      # 3. apply
 ```
 
-If a convention config file exists in the current directory, the `-c` flag is not needed.
-
-## Usage
-
-```
-gh-labeler [COMMAND] [OPTIONS]
-
-Commands:
-  sync      Synchronize repository labels
-  preview   Preview sync operations (dry-run)
-  init      Generate default configuration
-  list      List current repository labels
-  help      Show help information
-
-Options:
-  -t, --access-token <TOKEN>       GitHub access token
-  -r, --repository <REPO>          Repository (owner/repo format)
-  -c, --config <FILE>              Configuration file path (use "-" for stdin)
-      --template <REPO>            Template repository (owner/repo) — auto-detect convention config
-      --remote-config <SPEC>       Remote config file (owner/repo:path/to/file.yaml)
-      --dry-run                    Preview mode (no changes applied)
-      --allow-added-labels         Keep labels not in configuration
-      --json                       Output results as JSON (for sync/preview)
-  -v, --verbose                    Verbose output
-  -h, --help                       Show help information
-  -V, --version                    Print version
-```
-
-### Environment Variables
+Adopting a repository that already has good labels? Export them as your starting config:
 
 ```bash
-export GITHUB_TOKEN=your_token_here
-gh-labeler sync -r owner/repo
+gh-labeler export -o .github/labels.yml
 ```
-
----
 
 ## Configuration
 
-### Convention-Based Auto-Detection
-
-When no `-c`, `--template`, or `--remote-config` flag is provided, gh-labeler searches the current directory for config files in the following order:
-
-1. `.gh-labeler.json`
-2. `.gh-labeler.yaml`
-3. `.gh-labeler.yml`
-4. `.github/labels.json`
-5. `.github/labels.yaml`
-6. `.github/labels.yml`
-
-The first file found is used. If none exist, an error is returned suggesting `gh-labeler init`.
-
-### Remote Config
-
-Pull label definitions directly from a GitHub repository:
-
-```bash
-# Auto-detect convention config from a template repository
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --template org/label-templates
-
-# Fetch a specific file from a remote repository
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --remote-config org/label-templates:config/labels.yaml
-```
-
-The `--template` flag searches the remote repository for convention config files (same search order as local auto-detection). The `--remote-config` flag fetches a specific file path.
-
-Note: `--config`, `--template`, and `--remote-config` are mutually exclusive.
-
-### Config Loading Priority
-
-1. `--remote-config` — Fetch a specific file from a remote repository
-2. `--template` — Auto-detect convention config from a template repository
-3. `--config -` — Read from stdin (auto-detect JSON/YAML)
-4. `--config <path>` — Load from a local file
-5. Convention auto-detection in the current directory
-
-### Schema
-
-| Field         | Type     | Required | Description                             |
-|---------------|----------|----------|-----------------------------------------|
-| `name`        | string   | yes      | Label name                              |
-| `color`       | string   | yes      | Hex color code (with `#` prefix)        |
-| `description` | string   | no       | Label description                       |
-| `aliases`     | string[] | no       | Alternative names for rename detection  |
-| `delete`      | boolean  | no       | Mark label for deletion                 |
-
-### JSON
-
-```json
-[
-  {
-    "name": "bug",
-    "color": "#d73a4a",
-    "description": "Something isn't working",
-    "aliases": ["defect", "issue"]
-  },
-  {
-    "name": "enhancement",
-    "color": "#a2eeef",
-    "description": "New feature or request",
-    "aliases": ["feature"]
-  },
-  {
-    "name": "documentation",
-    "color": "#0075ca",
-    "description": "Improvements or additions to documentation",
-    "aliases": ["docs"]
-  }
-]
-```
-
-### YAML
+`gh-labeler` looks for the first of: `.gh-labeler.json`, `.gh-labeler.yaml`, `.gh-labeler.yml`, `.github/labels.json`, `.github/labels.yaml`, `.github/labels.yml`.
 
 ```yaml
-- name: "priority: high"
-  color: "#ff0000"
-  description: "High priority issue"
-  aliases: ["urgent", "critical"]
-
-- name: "type: feature"
-  color: "#00ff00"
-  description: "New feature request"
-  aliases: ["enhancement", "feature-request"]
-
-- name: "status: wontfix"
-  color: "#cccccc"
-  description: "This will not be worked on"
-  delete: true
+# yaml-language-server: $schema=https://raw.githubusercontent.com/kkhys/gh-labeler/main/schema/labels.schema.json
+labels:
+  - name: bug
+    color: "#d73a4a"
+    description: Something isn't working
+    aliases: [defect] # existing "defect" label gets renamed to "bug"
+  - name: enhancement
+    color: "#a2eeef"
+    description: New feature or request
+  - name: wontfix
+    color: "#ffffff"
+    delete: true # remove this label if it exists
+prune: false # true = delete labels not declared here
 ```
 
----
+A bare array of labels (without the `labels:` key) is also accepted. Colors are 6-digit hex with a `#` prefix.
 
-## Examples
+## Commands
+
+| Command                    | Description                                                   |
+| -------------------------- | ------------------------------------------------------------- |
+| `gh-labeler init`          | Create a starter config (`.github/labels.yml`)                |
+| `gh-labeler validate`      | Validate the config offline (no network, no token)            |
+| `gh-labeler plan [repo]`   | Preview changes (read-only)                                   |
+| `gh-labeler sync [repo]`   | Apply the config; shows the plan first and confirms deletions |
+| `gh-labeler list [repo]`   | Show current labels                                           |
+| `gh-labeler export [repo]` | Print current labels as a config document                     |
+| `gh-labeler schema`        | Print the config JSON Schema                                  |
+
+Common options:
+
+```
+[repo]                target as owner/repo; inferred when omitted
+-c, --config <path>   config file; "-" reads stdin
+--from <repo[:path]>  load the config from another repository
+--prune               delete labels not declared in the config
+--no-prune            keep undeclared labels even when the config sets prune: true
+--no-similarity       disable similarity-based rename detection (aliases still match)
+--json                machine-readable JSON output
+--token <token>       GitHub token (default: GITHUB_TOKEN → GH_TOKEN → gh auth token)
+-y, --yes             skip the deletion confirmation (sync)
+--dry-run             plan only (sync)
+--check               exit 6 when changes are pending (plan)
+```
+
+### Recipes
 
 ```bash
-# Convention config (auto-detected, no -c needed)
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo
+# CI: full sync, no prompts, fail on partial errors (exit code 5)
+gh-labeler sync --prune --yes
 
-# Explicit config file
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo -c my-labels.json
+# CI: fail the build when repository labels drift from the config (exit code 6)
+gh-labeler plan --check
 
-# Use a template repository's labels
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --template org/label-standards
+# Share one label set across an organization
+gh-labeler sync --from my-org/label-config
 
-# Fetch a specific remote config file
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo \
-  --remote-config org/configs:.github/labels.yaml
-
-# Pipe config via stdin
-cat labels.json | gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --config -
-
-# Generate config and pipe directly
-gh-labeler init --format yaml | gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --config -
-
-# JSON output for scripting / AI agents
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --json
-
-# Verbose preview
-gh-labeler preview -t $GITHUB_TOKEN -r owner/repo --verbose
-
-# Keep unlisted labels alive
-gh-labeler sync -t $GITHUB_TOKEN -r owner/repo --allow-added-labels
+# Pipe a generated config
+generate-labels | gh-labeler sync -c - --json
 ```
 
-### JSON Output
+### GitHub Actions
 
-With `--json`, sync and preview commands produce structured output:
+```yaml
+name: Sync labels
+on:
+  push:
+    branches: [main]
+    paths: [.github/labels.yml]
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - run: npx gh-labeler sync --prune --yes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+`GITHUB_REPOSITORY` and `GITHUB_TOKEN` are picked up automatically.
+
+## For AI Agents
+
+See [AGENTS.md](./AGENTS.md) for the full machine-oriented reference (JSON envelope schema, exit codes).
+
+### Structured output
+
+Every command except `init` and `schema` accepts `--json` and emits exactly one envelope on stdout:
 
 ```json
 {
+  "schema_version": 2,
+  "command": "sync",
+  "repository": "kkhys/example",
   "status": "success",
   "dry_run": false,
   "exit_code": 0,
   "summary": {
-    "created": 2,
-    "updated": 1,
-    "deleted": 0,
+    "created": 1,
+    "updated": 0,
     "renamed": 1,
-    "unchanged": 3
+    "deleted": 0,
+    "kept": 8
   },
   "operations": [
     { "type": "create", "label": { "name": "bug", "color": "#d73a4a" } },
-    { "type": "rename", "current_name": "defect", "new_name": "bug" }
+    {
+      "type": "rename",
+      "from": "defect",
+      "to": "bug",
+      "matched_by": "alias",
+      "label": { "name": "bug", "color": "#d73a4a" }
+    }
   ],
-  "errors": [],
+  "unmanaged": [],
+  "failures": [],
   "idempotent": false
 }
 ```
 
-The `status` field is one of `success`, `no_changes`, or `error`.
+Errors are structured too: `{ "status": "error", "exit_code": 2, "error": { "code": "config_error", "message": "...", "hint": "..." } }`.
 
----
+### Exit codes
 
-## Exit Codes
+| Code | Meaning                                  |
+| ---- | ---------------------------------------- |
+| 0    | Success (including "no changes")         |
+| 1    | General error                            |
+| 2    | Config error                             |
+| 3    | Authentication error                     |
+| 4    | Repository not found                     |
+| 5    | Partial failure (some operations failed) |
+| 6    | Drift detected (`plan --check` only)     |
 
-| Code | Meaning                                   |
-|------|-------------------------------------------|
-| 0    | Success                                   |
-| 1    | General / unclassified error              |
-| 2    | Configuration or validation error         |
-| 3    | Authentication failure (invalid token)    |
-| 4    | Target repository not found               |
-| 5    | Partial success (some operations failed)  |
+## Migrating from v0 (Rust)
 
----
+v1 is a TypeScript rewrite with breaking CLI changes:
 
-## Library Usage
+- Deleting unmanaged labels is now opt-in: add `--prune` (previously the default; `--allow-added-labels` is gone)
+- `preview` is now `plan`; the bare `gh-labeler` invocation without a subcommand was removed
+- `-t/--access-token` is now `--token` (or just use env vars / the `gh` CLI); `-r/--repository` is now a positional argument
+- `--template` and `--remote-config` merged into `--from <repo[:path]>`
+- The JSON envelope changed (`schema_version: 2`): renames use `from`/`to`/`matched_by`, unchanged labels are `keep`, structured `failures` replace error strings
+- crates.io distribution is discontinued; install from npm
 
-```toml
-[dependencies]
-gh-labeler = "0.1"
-tokio = { version = "1.0", features = ["full"] }
-```
+Config files from v0 keep working unchanged.
 
-```rust
-use gh_labeler::{SyncConfig, LabelSyncer, LabelConfig};
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = SyncConfig {
-        access_token: "your_token".to_string(),
-        repository: "owner/repo".to_string(),
-        dry_run: false,
-        allow_added_labels: false,
-        labels: Some(vec![
-            LabelConfig::new("bug".to_string(), "#d73a4a".to_string())?,
-        ]),
-    };
-
-    let syncer = LabelSyncer::new(config).await?;
-    let result = syncer.sync_labels().await?;
-
-    println!(
-        "Created: {}, Updated: {}, Deleted: {}",
-        result.created(), result.updated(), result.deleted()
-    );
-
-    Ok(())
-}
-```
-
-### Additional Public APIs
-
-The library also exposes utilities for loading and parsing label configs:
-
-```rust
-use gh_labeler::{
-    load_labels_from_reader,   // Read labels from any std::io::Read (stdin, files, buffers)
-    parse_labels_auto_detect,  // Parse a string, auto-detecting JSON or YAML
-    load_labels_from_file,     // Load from a local file (format by extension)
-    find_convention_config,    // Find a convention config file in the current directory
-    fetch_remote_config,       // Fetch a config file from a GitHub repository
-    exit_codes,                // Exit code constants (SUCCESS, CONFIG_ERROR, etc.)
-    SyncOutput,                // Structured output envelope for JSON mode
-    SyncStatus,                // High-level sync outcome (Success, NoChanges, Error)
-    SyncSummary,               // Numeric summary of sync operations
-};
-```
-
----
-
-## Contributing
+## Development
 
 ```bash
-git clone https://github.com/kkhys/gh-labeler.git
-cd gh-labeler
-cargo build
-cargo test
+nix develop     # optional: Node 24 + corepack + gh via the flake
+pnpm install    # installs deps and registers git hooks (lefthook)
+pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test
 ```
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes
-4. Push and open a Pull Request
+Linting is oxlint, formatting is oxfmt; both also run on staged files via the pre-commit hook, and typecheck + tests run on pre-push.
 
 ## License
 
-MIT — see [LICENSE.md](LICENSE.md) for details.
-
-## Acknowledgments
-
-- [octocrab](https://github.com/XAMPPRocky/octocrab) — GitHub API client
-- [clap](https://github.com/clap-rs/clap) — CLI framework
+[MIT](./LICENSE.md) © [Keisuke Hayashi](https://kkhys.me)

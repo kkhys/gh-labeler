@@ -5,8 +5,8 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Test coverage
-coverage/
+# Test coverage (root-anchored: .claude/skills/coverage/ must stay tracked)
+/coverage/
 
 # Logs
 *.log
