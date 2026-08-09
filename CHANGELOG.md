@@ -1,5 +1,11 @@
 # gh-labeler
 
+## 1.1.0
+
+### Minor Changes
+
+- [#147](https://github.com/kkhys/gh-labeler/pull/147) [`684369b`](https://github.com/kkhys/gh-labeler/commit/684369b4fa0cb70d47f59f7cd4e7100619d00d64) Thanks [@kkhys](https://github.com/kkhys)! - Add `extends` to the config object form: inherit labels from base configs (a local path like `./base.yml` or another repository as `owner/repo[:path]`), merged in order with the extending file's own labels overriding by name (case-insensitive). `delete: true` cancels an inherited label, nesting is supported with cycle detection, and `prune` is never inherited from a base. `validate` stays offline and resolves only local extends.
+
 ## 1.0.0
 
 ### Major Changes
