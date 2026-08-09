@@ -12,8 +12,18 @@
         "labels": { "$ref": "#/$defs/labelArray" },
         "prune": {
           "type": "boolean",
-          "description": "Delete repository labels that are not declared in `labels`. Default: false.",
+          "description": "Delete repository labels that are not declared in `labels`. Default: false. Never inherited through `extends`.",
           "default": false
+        },
+        "extends": {
+          "description": "Base config(s) to inherit labels from. Each entry is a path starting with './', '../', or '/' (relative to this file) or 'owner/repo[:path]' for another repository. Bases merge in order; this file's labels override inherited ones by name (case-insensitive).",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          ]
         }
       },
       "required": ["labels"],

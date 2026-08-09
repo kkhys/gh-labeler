@@ -25,6 +25,7 @@ Summary: 1 to create, 1 to update, 1 to rename, 8 unchanged
 - Zero-config — repository inferred from the `origin` remote (or `GITHUB_REPOSITORY` in Actions), token from `GITHUB_TOKEN` / `GH_TOKEN` / the `gh` CLI. Inside a clone, `gh-labeler sync` just works
 - Safe by default — labels are deleted only when flagged `delete: true` or when you opt into `--prune`; interactive syncs confirm deletions first
 - Smart renames — alias matching plus Levenshtein similarity turn would-be delete+create pairs into renames that preserve label history on issues and PRs
+- Shareable configs — `extends` inherits labels from a base config (local or in another repository) and overrides them per repository; `--from` syncs straight from a central repo
 - Built for AI agents — `--json` gives every state-reporting command a versioned, structured envelope; errors carry machine-readable codes and actionable hints; exit codes are systematic
 - Self-describing config — a published JSON Schema powers editor autocomplete in both JSON and YAML
 
@@ -73,6 +74,23 @@ prune: false # true = delete labels not declared here
 ```
 
 A bare array of labels (without the `labels:` key) is also accepted. Colors are 6-digit hex with a `#` prefix.
+
+### Extending a shared config
+
+A config can inherit labels from one or more base configs with `extends` — keep an organization-wide base in one repository and add or override per-repository labels on top:
+
+```yaml
+extends: my-org/label-config # or "owner/repo:path/to/labels.yml", or "./base.yml"
+labels:
+  - name: bug
+    color: "#ff0000" # overrides the base "bug" entirely (same name, case-insensitive)
+  - name: needs-triage
+    color: "#ededed" # added on top of the base set
+  - name: wontfix
+    delete: true # cancels an inherited label
+```
+
+Bases merge in the listed order, then the file's own `labels` win. Overriding replaces the whole entry, and `extends` can nest (cycles are rejected). `prune` is never inherited from a base — only the config you load directly decides it. Local paths (`./`, `../`, `/`) resolve relative to the extending file; inside a config fetched from another repository they resolve within that same repository. Note that `validate` is offline, so it resolves only local paths — use `plan` to check configs that extend another repository.
 
 ## Commands
 

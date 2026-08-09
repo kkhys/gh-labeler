@@ -35,7 +35,10 @@ labels:
     aliases: [defect] # optional: old names to rename from
     delete: false # optional: true = delete this label if present (name alone suffices then)
 prune: false # optional: true = delete labels not declared above
+extends: [org/label-config] # optional: base config(s) to inherit labels from
 ```
+
+`extends` (object form only) accepts a string or array: each entry is a local path starting with `./`, `../`, or `/` (relative to the extending file) or `owner/repo[:path]` (fetched like `--from`). Bases merge in listed order, then the file's own `labels` apply last; an entry overrides an inherited one with the same name (case-insensitive) as a whole, and `delete: true` cancels an inherited label. `prune` is never inherited — only the directly loaded config decides it. Nesting is allowed; cycles are a config error. Paths inside a config fetched from another repository resolve within that same repository. `validate` stays offline and resolves only local paths; configs extending another repository need `plan`/`sync` (config error otherwise).
 
 A bare top-level array of labels is also accepted. Label names must be unique within the config (case-insensitive, matching GitHub); duplicates are rejected when the config is loaded. Aliases must not repeat across entries or collide with any declared label name (also case-insensitive); such contradictions are rejected too.
 
@@ -198,7 +201,7 @@ Imports use Node subpath imports (`#core/planner.js`, `#errors.js`, …) declare
 - **`core/similarity.ts`** — Levenshtein distance, `SIMILARITY_THRESHOLD` (0.7), `calculateLabelSimilarity()`
 - **`core/planner.ts`** — `planSync()` pure planning producing `PlannedOperation[]` (`create`/`update`/`rename`/`delete`/`keep`) + `unmanaged` list
 - **`core/syncer.ts`** — `applyPlan()` execution with per-operation failure collection, `buildReport()` → `SyncReport` (status/exit code/idempotence)
-- **`config/index.ts`** — config parsing (bare array or `{labels, prune}` object form), format detection, convention file search (`CONVENTION_CONFIG_FILES`), stdin loading, remote config via `RemoteFileFetcher`, `serializeConfigDocument()` (init/export output with `$schema`)
+- **`config/index.ts`** — config parsing (bare array or `{labels, prune, extends}` object form), format detection, convention file search (`CONVENTION_CONFIG_FILES`), stdin loading, remote config via `RemoteFileFetcher`, `extends` resolution (`resolveConfigExtends()`: name-keyed merge, cycle detection, prune never inherited), `serializeConfigDocument()` (init/export output with `$schema`)
 - **`github/context.ts`** — zero-config inference: token (`--token` → `GITHUB_TOKEN` → `GH_TOKEN` → `gh auth token`), repository (arg → `GITHUB_REPOSITORY` → origin git remote)
 - **`github/client.ts`** — `GitHubClient` wrapping Octokit, `LabelService` interface (DI boundary), `GitHubLabel`, Contents API fetch for remote configs
 - **`output/report.ts`** — stable snake_case JSON envelope (`reportEnvelope`, `errorEnvelope`, `REPORT_SCHEMA_VERSION`)
@@ -244,7 +247,7 @@ Imports use Node subpath imports (`#core/planner.js`, `#errors.js`, …) declare
 - Tests live in `tests/*.test.ts`, discovered by vitest's default include pattern (no vitest config file); helpers in `tests/helpers.ts`
 - **Planning tests** (`planner.test.ts`) — pure `planSync()` output, matching priority, prune semantics
 - **Sync tests** (`syncer.test.ts`) — `applyPlan()` against `MockLabelService`/`FailingLabelService`, dry-run, failure collection, report statuses
-- **Config tests** (`config.test.ts`) — both document forms, format auto-detect, convention priority, remote fetch with a fake fetcher, serialization round-trips
+- **Config tests** (`config.test.ts`) — both document forms, format auto-detect, convention priority, remote fetch with a fake fetcher, extends resolution (merge order, overrides, cycles, offline failure), serialization round-trips
 - **Context tests** (`context.test.ts`) — repo/token resolution priority, git URL parsing (env vars saved/restored per test)
 - **Report tests** (`report.test.ts`) — envelope shape stability (snake_case, `schema_version`)
 - Environment-dependent behavior (`gh auth token` fallback) must not make tests fail on developer machines

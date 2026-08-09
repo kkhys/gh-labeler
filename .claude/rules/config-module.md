@@ -22,9 +22,16 @@ paths:
 
 ## Config Document Forms
 
-- Two accepted shapes: a bare array of labels, or an object `{ "$schema"?, "prune"?, "labels": [...] }`
+- Two accepted shapes: a bare array of labels, or an object `{ "$schema"?, "prune"?, "extends"?, "labels": [...] }`
 - `serializeConfigDocument()` always emits the object form with editor schema support (`$schema` for JSON, `yaml-language-server` directive for YAML)
 - `schema/labels.schema.json` is the source of truth for the config shape — keep it in sync with `validateLabelSpec()` and `normalizeConfigDocument()`
+
+## Extends
+
+- `extends` (object form only): string or array; each ref is a local path starting with `./`, `../`, or `/` (relative to the extending file) or `owner/repo[:path]`
+- Bases merge in listed order, the extending file's `labels` apply last; override replaces the whole entry, keyed by case-insensitive name — `resolveConfigExtends()` for local configs, resolved inside `fetchRemoteConfig()` for remote ones
+- `prune` is never inherited from a base config; nesting is allowed, cycles are rejected; paths inside a remote config resolve within that same repository and must not escape it
+- Cross-file alias contradictions are re-checked after merging (`validateMergedAliases()`); `validate` stays offline, so remote extends fail there with a hint
 
 ## File Format Support
 

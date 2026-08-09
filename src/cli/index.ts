@@ -12,6 +12,7 @@ import {
   loadConfigFile,
   loadConfigFromStdin,
   parseRemoteConfigRef,
+  resolveConfigExtends,
   serializeConfigDocument,
 } from "#config/index.js";
 import { resolveRepository, resolveToken } from "#github/context.js";
@@ -86,15 +87,19 @@ async function run(command: string, json: boolean, fn: () => Promise<number>): P
   }
 }
 
-function loadLocalConfig(configOption: string | undefined): {
+interface LocalConfig {
   config: LabelConfigFile;
   source: string;
-} {
+  /** Null when the config came from stdin; extends paths then use the cwd. */
+  path: string | null;
+}
+
+function loadLocalConfig(configOption: string | undefined): LocalConfig {
   if (configOption === "-") {
-    return { config: loadConfigFromStdin(), source: "stdin" };
+    return { config: loadConfigFromStdin(), source: "stdin", path: null };
   }
   if (configOption) {
-    return { config: loadConfigFile(configOption), source: configOption };
+    return { config: loadConfigFile(configOption), source: configOption, path: configOption };
   }
   const conventionPath = findConventionConfig(process.cwd());
   if (!conventionPath) {
@@ -103,7 +108,7 @@ function loadLocalConfig(configOption: string | undefined): {
       `Searched for: ${CONVENTION_CONFIG_FILES.join(", ")}. Run \`gh-labeler init\` to create one, or pass --config.`,
     );
   }
-  return { config: loadConfigFile(conventionPath), source: conventionPath };
+  return { config: loadConfigFile(conventionPath), source: conventionPath, path: conventionPath };
 }
 
 interface PreparedPlan {
@@ -123,12 +128,14 @@ async function preparePlan(repoArg: string | undefined, opts: SyncOptions): Prom
   const token = resolveToken(opts.token);
   const repository = resolveRepository(repoArg);
 
-  // Load local config before any network call so config mistakes fail fast.
+  // Parse the local config before any network call so config mistakes fail
+  // fast; extends refs may point at other repositories, so they resolve after
+  // the client connects.
   let config: LabelConfigFile | null = null;
+  let local: LocalConfig | null = null;
   if (!opts.from) {
-    const { config: localConfig, source } = loadLocalConfig(opts.config);
-    config = localConfig;
-    note(opts.json, `Config: ${source}`);
+    local = loadLocalConfig(opts.config);
+    note(opts.json, `Config: ${local.source}`);
   }
 
   const client = await GitHubClient.connect(token, repository);
@@ -137,6 +144,8 @@ async function preparePlan(repoArg: string | undefined, opts: SyncOptions): Prom
     const ref = parseRemoteConfigRef(opts.from);
     config = await fetchRemoteConfig(client, ref);
     note(opts.json, `Config: ${opts.from} (remote)`);
+  } else if (local) {
+    config = await resolveConfigExtends(local.config, local.path, client);
   }
 
   if (!config) {
@@ -179,8 +188,11 @@ async function planAction(repoArg: string | undefined, opts: PlanCommandOptions)
   return report.exitCode;
 }
 
-function validateAction(opts: ValidateOptions): Promise<number> {
-  const { config, source } = loadLocalConfig(opts.config);
+async function validateAction(opts: ValidateOptions): Promise<number> {
+  const { config: parsed, source, path } = loadLocalConfig(opts.config);
+  // No fetcher: validate stays offline. Local extends resolve; remote refs
+  // fail with a hint pointing at `plan`.
+  const config = await resolveConfigExtends(parsed, path);
   const prune = config.prune ?? false;
 
   if (opts.json) {
@@ -201,7 +213,7 @@ function validateAction(opts: ValidateOptions): Promise<number> {
       }.`,
     );
   }
-  return Promise.resolve(EXIT_CODES.SUCCESS);
+  return EXIT_CODES.SUCCESS;
 }
 
 async function syncAction(repoArg: string | undefined, opts: SyncOptions): Promise<number> {
