@@ -120,6 +120,8 @@ generate-labels | gh-labeler sync -c - --json
 
 ### GitHub Actions
 
+The official action, [kkhys/gh-labeler-actions](https://github.com/kkhys/gh-labeler-actions), wraps the CLI and republishes the JSON envelope as step outputs and a job summary:
+
 ```yaml
 name: Sync labels
 on:
@@ -130,15 +132,22 @@ jobs:
   labels:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       issues: write
     steps:
       - uses: actions/checkout@v6
-      - run: npx gh-labeler sync --prune --yes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: kkhys/gh-labeler-actions@v1
+        with:
+          prune: true
 ```
 
-`GITHUB_REPOSITORY` and `GITHUB_TOKEN` are picked up automatically.
+Set `command: plan` with `check: true` to fail the build on label drift instead of syncing. Running the CLI directly also works — `GITHUB_REPOSITORY` and `GITHUB_TOKEN` are picked up automatically:
+
+```yaml
+- run: npx gh-labeler sync --prune --yes
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
 
 ## For AI Agents
 
