@@ -68,7 +68,7 @@
     "@changesets/cli": "3.0.2",
     "@types/node": "24.13.3",
     "@vitest/coverage-v8": "5.0.0",
-    "lefthook": "2.1.12",
+    "lefthook": "2.1.14",
     "oxfmt": "0.67.0",
     "oxlint": "1.82.0",
     "typescript": "7.0.2",
