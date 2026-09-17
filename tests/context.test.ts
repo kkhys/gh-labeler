@@ -1,6 +1,6 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   parseGitRemoteUrl,
@@ -58,17 +58,31 @@ describe(parseGitRemoteUrl, () => {
 });
 
 describe(resolveRepository, () => {
-  const saved = process.env["GITHUB_REPOSITORY"];
+  // Git exports GIT_DIR and related variables to hooks, so under a pre-push
+  // hook `git remote get-url origin` would resolve the hook's repository even
+  // from an unrelated directory.
+  const isolatedEnv = [
+    "GITHUB_REPOSITORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_CEILING_DIRECTORIES",
+  ];
+  const saved = new Map(isolatedEnv.map((key) => [key, process.env[key]]));
 
   beforeEach(() => {
-    delete process.env["GITHUB_REPOSITORY"];
+    for (const key of isolatedEnv) {
+      delete process.env[key];
+    }
   });
 
   afterEach(() => {
-    if (saved === undefined) {
-      delete process.env["GITHUB_REPOSITORY"];
-    } else {
-      process.env["GITHUB_REPOSITORY"] = saved;
+    for (const [key, value] of saved) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
     }
   });
 
@@ -88,6 +102,9 @@ describe(resolveRepository, () => {
 
   it("fails with a hint when nothing can be inferred", () => {
     const dir = mkdtempSync(join(tmpdir(), "gh-labeler-norepo-"));
+    // Keep git from discovering a clone above the temp directory, since
+    // TMPDIR can itself live inside one.
+    process.env["GIT_CEILING_DIRECTORIES"] = dirname(dir);
     expect(() => resolveRepository(undefined, dir)).toThrow(ConfigError);
   });
 });
