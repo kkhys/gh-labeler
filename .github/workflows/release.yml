@@ -17,22 +17,25 @@ on:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
-permissions:
-  contents: write
-  pull-requests: write
-  # id-token backs npm Trusted Publishing (OIDC); publish auth uses no npm token
-  id-token: write
+# Each job grants only what it needs, so id-token stays confined to publish.
+permissions: {}
 
+# Dependency caching stays off throughout, as changesets recommends, so a
+# poisoned cache entry cannot reach the jobs holding write tokens.
 jobs:
-  release:
-    name: Release
+  select-mode:
+    name: Select Mode
+    if: github.event.inputs.dry_run != 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.select-mode.outputs.mode }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Fetch full history for GitHub info-enhanced changelog
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
@@ -41,32 +44,113 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-          cache: pnpm
+          package-manager-cache: false
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm run build
+      - name: Select Changesets Mode
+        id: select-mode
+        uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
 
-      - name: Check Changesets Status (Dry Run)
-        if: github.event.inputs.dry_run == 'true'
-        run: |
-          echo "Running in dry-run mode..."
-          pnpm changeset status --verbose
-          pnpm run release:dry-run
-
-      - name: Create Release Pull Request or Publish
-        if: github.event.inputs.dry_run != 'true'
-        id: changesets
-        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+  version:
+    name: Create Release Pull Request
+    needs: select-mode
+    if: needs.select-mode.outputs.mode == 'version'
+    runs-on: ubuntu-latest
+    permissions:
+      # Version commits and the release pull request go through the GitHub API
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version-script: pnpm run version
-          publish-script: pnpm run release
+          # Fetch full history for GitHub info-enhanced changelog
+          fetch-depth: 0
+          # The action commits through the GitHub API, not git push
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create or Update Release Pull Request
+        uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          script: pnpm run version
           pr-title: "chore: version packages"
           commit-message: "chore: version packages"
 
-      - name: Dry Run Summary
-        if: github.event.inputs.dry_run == 'true'
+  publish:
+    name: Publish
+    needs: select-mode
+    if: needs.select-mode.outputs.mode == 'publish'
+    runs-on: ubuntu-latest
+    permissions:
+      # Tags and GitHub releases are created through the GitHub API
+      contents: write
+      # id-token backs npm Trusted Publishing (OIDC); publish auth uses no npm token
+      id-token: write
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish to npm
+        uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          script: pnpm run release
+
+  dry-run:
+    name: Dry Run
+    if: github.event.inputs.dry_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # changeset status diffs against the base branch
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Changesets Status and Pack
         run: |
+          pnpm changeset status --verbose
+          pnpm run release:dry-run
           echo "Dry run completed successfully. No publishing was performed."
