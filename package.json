@@ -67,12 +67,12 @@
     "@changesets/changelog-github": "1.0.1",
     "@changesets/cli": "3.0.3",
     "@types/node": "24.13.4",
-    "@vitest/coverage-v8": "5.0.0",
+    "@vitest/coverage-v8": "5.0.1",
     "lefthook": "2.1.14",
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0",
     "typescript": "7.0.2",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "engines": {
     "node": ">=22"
