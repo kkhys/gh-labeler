@@ -236,7 +236,7 @@ Config files from v0 keep working unchanged.
 ## Development
 
 ```bash
-nix develop     # optional: Node 24 + corepack + gh via the flake
+nix develop     # optional: Node 26 + corepack + gh via the flake
 pnpm install    # installs deps and registers git hooks (lefthook)
 pnpm run lint && pnpm run format:check && pnpm run typecheck && pnpm run test
 ```

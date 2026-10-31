@@ -20,9 +20,11 @@
       devShells = forEachSystem (pkgs: {
         default = pkgs.mkShell {
           packages = [
-            pkgs.nodejs_24
-            # corepack provisions the exact pnpm pinned in package.json's packageManager
-            pkgs.corepack_24
+            pkgs.nodejs_26
+            # corepack provisions the exact pnpm pinned in package.json's packageManager.
+            # Node.js 25+ no longer bundles corepack (no corepack_26), so the standalone
+            # package is rebuilt on Node 26 to keep pnpm and scripts on one runtime.
+            (pkgs.corepack.override { nodejs-slim = pkgs.nodejs-slim_26; })
             pkgs.gh
           ];
         };

@@ -159,7 +159,7 @@ Bypass with `git commit --no-verify` only when explicitly needed.
 ### Nix Dev Shell
 
 ```bash
-nix develop                    # node 24 + corepack (pnpm via packageManager) + gh
+nix develop                    # node 26 + corepack (pnpm via packageManager) + gh
 ```
 
 ### Versioning & Release
@@ -172,7 +172,7 @@ pnpm run release               # Build + changeset publish (CI does this)
 
 Release flow: push changesets → the release workflow opens a version PR → merging it publishes to npm.
 
-Dependency policy: all versions are pinned exactly (`save-exact = true` in `.npmrc`); Renovate keeps them current. Requires Node.js >= 22.
+Dependency policy: all versions are pinned exactly (`save-exact = true` in `.npmrc`); Renovate keeps them current. Requires Node.js >= 22. Exception: `@types/node` stays on the oldest supported major (22.x, enforced by a `packageRules` entry in `.github/renovate.json`) so typecheck rejects APIs newer Node.js adds; raise it together with `engines.node`.
 
 ## Architecture
 
