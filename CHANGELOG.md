@@ -1,5 +1,11 @@
 # gh-labeler
 
+## 1.1.1
+
+### Patch Changes
+
+- [#178](https://github.com/kkhys/gh-labeler/pull/178) [`c33a1d5`](https://github.com/kkhys/gh-labeler/commit/c33a1d53f76dc7b381c17b2bd6173a8b6d08b878) Thanks [@kkhys](https://github.com/kkhys)! - Update `yaml` to 2.9.1, which limits recursive merge aliases when parsing YAML configs. This hardens loading configs from other repositories (`--from`, `extends: owner/repo`) against documents that enable merge keys with a `%YAML 1.1` directive.
+
 ## 1.1.0
 
 ### Minor Changes
