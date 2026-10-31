@@ -159,7 +159,7 @@ Bypass with `git commit --no-verify` only when explicitly needed.
 ### Nix Dev Shell
 
 ```bash
-nix develop                    # node 24 + corepack (pnpm via packageManager) + gh
+nix develop                    # node 26 + corepack (pnpm via packageManager) + gh
 ```
 
 ### Versioning & Release
