@@ -11,5 +11,12 @@
   "assignees": ["kkhys"],
   "labels": ["type: bump-version"],
   "assignAutomerge": true,
-  "minimumReleaseAge": "3 days"
+  "minimumReleaseAge": "3 days",
+  "packageRules": [
+    {
+      "description": "Keep @types/node on the oldest supported Node.js major (engines.node >=22) so typecheck rejects APIs newer runtimes add; raise it together with engines.node",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "22.x"
+    }
+  ]
 }
