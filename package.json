@@ -59,7 +59,7 @@
     "@octokit/plugin-retry": "8.1.1",
     "@octokit/plugin-throttling": "11.0.5",
     "@octokit/rest": "22.0.1",
-    "commander": "15.0.0",
+    "commander": "15.1.0",
     "picocolors": "1.1.1",
     "yaml": "2.9.1"
   },
